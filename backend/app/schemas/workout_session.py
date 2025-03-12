@@ -45,6 +45,15 @@ class SessionExerciseResponse(SessionExerciseBase):
     id: int
     session_id: int
     sets: List[ExerciseSetResponse] = []
+    name: Optional[str] = None
+    muscle_group: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    equipment: Optional[str] = None
+    target_weight: Optional[float] = None
+    target_reps: Optional[int] = None
+    rest_seconds: Optional[int] = None
+    sets_count: Optional[int] = None
     
     class Config:
         from_attributes = True
@@ -55,6 +64,7 @@ class WorkoutSessionBase(BaseModel):
     day_of_week: Optional[int] = None
     notes: Optional[str] = None
     rating: Optional[int] = None
+    status: Optional[str] = "in_progress"
 
 class WorkoutSessionCreate(WorkoutSessionBase):
     exercises: Optional[List[SessionExerciseCreate]] = None
@@ -63,6 +73,7 @@ class WorkoutSessionUpdate(BaseModel):
     end_time: Optional[datetime] = None
     notes: Optional[str] = None
     rating: Optional[int] = None
+    status: Optional[str] = None
 
 class WorkoutSessionResponse(WorkoutSessionBase):
     id: int

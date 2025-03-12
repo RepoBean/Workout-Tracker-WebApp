@@ -422,7 +422,7 @@ const WorkoutPlanDetail = () => {
                             <TableCell>
                               <Box>
                                 <Typography variant="body2" fontWeight="medium">
-                                  {exercise.name}
+                                  {exercise.name || `Exercise ID: ${exercise.exercise_id}`}
                                 </Typography>
                                 {exercise.muscle_group && (
                                   <Typography variant="caption" color="text.secondary">
@@ -440,7 +440,7 @@ const WorkoutPlanDetail = () => {
                               {exercise.target_weight > 0 
                                 ? `${weightUnit === 'lb' 
                                     ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
-                                    : exercise.target_weight} ${weightUnit}`
+                                    : exercise.target_weight.toFixed(1)} ${weightUnit}`
                                 : '-'}
                             </TableCell>
                           </TableRow>
@@ -492,7 +492,7 @@ const WorkoutPlanDetail = () => {
                             <TableCell>
                               <Box>
                                 <Typography variant="body2" fontWeight="medium">
-                                  {exercise.name}
+                                  {exercise.name || `Exercise ID: ${exercise.exercise_id}`}
                                 </Typography>
                                 {exercise.muscle_group && (
                                   <Typography variant="caption" color="text.secondary">
@@ -510,7 +510,7 @@ const WorkoutPlanDetail = () => {
                               {exercise.target_weight > 0 
                                 ? `${weightUnit === 'lb' 
                                     ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
-                                    : exercise.target_weight} ${weightUnit}`
+                                    : exercise.target_weight.toFixed(1)} ${weightUnit}`
                                 : '-'}
                             </TableCell>
                           </TableRow>

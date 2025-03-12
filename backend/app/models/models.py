@@ -15,6 +15,7 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_login = Column(DateTime(timezone=True), nullable=True)
     profile_picture = Column(String, nullable=True)
+    settings = Column(Text, nullable=True)  # JSON string for user settings
     
     # Relationships
     workout_plans = relationship("WorkoutPlan", back_populates="owner")
@@ -98,6 +99,7 @@ class WorkoutSession(Base):
     notes = Column(Text, nullable=True)
     rating = Column(Integer, nullable=True)
     day_of_week = Column(Integer, nullable=True)
+    status = Column(String, default="in_progress", nullable=False)
     
     # Relationships
     user = relationship("User", back_populates="workout_sessions")

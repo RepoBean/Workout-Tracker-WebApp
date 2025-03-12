@@ -61,7 +61,8 @@ async def create_workout_session(
         workout_plan_id=session.workout_plan_id,
         day_of_week=session.day_of_week,
         notes=session.notes,
-        rating=session.rating
+        rating=session.rating,
+        status=session.status or "in_progress"
     )
     
     db.add(db_session)
@@ -81,6 +82,14 @@ async def create_workout_session(
                     detail=f"Exercise with id {exercise_data.exercise_id} not found"
                 )
             
+            # If this session is from a plan, get the plan exercise details for target weight/reps
+            plan_exercise = None
+            if session.workout_plan_id:
+                plan_exercise = db.query(PlanExercise).filter(
+                    PlanExercise.workout_plan_id == session.workout_plan_id,
+                    PlanExercise.exercise_id == exercise_data.exercise_id
+                ).first()
+            
             # Create session exercise
             db_session_exercise = SessionExercise(
                 session_id=db_session.id,
@@ -89,6 +98,20 @@ async def create_workout_session(
                 order=exercise_data.order if exercise_data.order is not None else i,
                 notes=exercise_data.notes
             )
+            
+            # Add additional properties to the SQLAlchemy object (these won't be saved to DB)
+            db_session_exercise.name = exercise.name
+            db_session_exercise.muscle_group = exercise.muscle_group
+            db_session_exercise.description = exercise.description
+            db_session_exercise.category = exercise.category
+            db_session_exercise.equipment = exercise.equipment
+            
+            # Add plan-specific details if available
+            if plan_exercise:
+                db_session_exercise.target_weight = plan_exercise.target_weight
+                db_session_exercise.target_reps = plan_exercise.reps
+                db_session_exercise.rest_seconds = plan_exercise.rest_seconds
+                db_session_exercise.sets_count = plan_exercise.sets
             
             db.add(db_session_exercise)
             db.commit()
@@ -114,9 +137,23 @@ async def create_workout_session(
     
     # If based on a workout plan but no exercises provided, auto-populate from plan
     elif session.workout_plan_id and not session.exercises:
-        plan_exercises = db.query(PlanExercise).filter(
+        # Base query for plan exercises
+        plan_exercises_query = db.query(PlanExercise).filter(
             PlanExercise.workout_plan_id == session.workout_plan_id
-        ).order_by(PlanExercise.order).all()
+        )
+        
+        # If day_of_week is provided, filter exercises by that day
+        if session.day_of_week:
+            plan_exercises_query = plan_exercises_query.filter(
+                PlanExercise.day_of_week == session.day_of_week
+            )
+        
+        # Get exercises in order
+        plan_exercises = plan_exercises_query.order_by(PlanExercise.order).all()
+        
+        # If no exercises found with the day filter, log a warning
+        if not plan_exercises and session.day_of_week:
+            print(f"Warning: No exercises found for plan {session.workout_plan_id} on day {session.day_of_week}")
         
         for i, plan_exercise in enumerate(plan_exercises):
             db_session_exercise = SessionExercise(
@@ -187,6 +224,30 @@ async def get_workout_session(
             detail="Workout session not found"
         )
     
+    # Load exercise details for the session exercises
+    for session_exercise in session.exercises:
+        # Get exercise details
+        exercise = db.query(Exercise).filter(Exercise.id == session_exercise.exercise_id).first()
+        if exercise:
+            session_exercise.name = exercise.name
+            session_exercise.muscle_group = exercise.muscle_group
+            session_exercise.description = exercise.description
+            session_exercise.category = exercise.category
+            session_exercise.equipment = exercise.equipment
+        
+        # If this session is from a plan, get the plan exercise details
+        if session.workout_plan_id:
+            plan_exercise = db.query(PlanExercise).filter(
+                PlanExercise.workout_plan_id == session.workout_plan_id,
+                PlanExercise.exercise_id == session_exercise.exercise_id
+            ).first()
+            
+            if plan_exercise:
+                session_exercise.target_weight = plan_exercise.target_weight
+                session_exercise.target_reps = plan_exercise.reps
+                session_exercise.rest_seconds = plan_exercise.rest_seconds
+                session_exercise.sets_count = plan_exercise.sets
+    
     return session
 
 @router.patch("/{session_id}", response_model=WorkoutSessionResponse)
@@ -218,6 +279,11 @@ async def update_workout_session(
         db_session.notes = session_update.notes
     if session_update.rating is not None:
         db_session.rating = session_update.rating
+    if session_update.status is not None:
+        db_session.status = session_update.status
+        # If status is set to completed and end_time is not set, set it to now
+        if session_update.status == "completed" and not db_session.end_time:
+            db_session.end_time = func.now()
     
     db.commit()
     db.refresh(db_session)
@@ -631,8 +697,9 @@ async def end_workout_session(
             detail="Workout session not found"
         )
     
-    # Set end time to now
+    # Set end time to now and status to completed
     db_session.end_time = func.now()
+    db_session.status = "completed"
     
     db.commit()
     db.refresh(db_session)

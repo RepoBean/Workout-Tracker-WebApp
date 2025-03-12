@@ -27,11 +27,18 @@ import {
   CircularProgress,
   InputAdornment,
   Chip,
-  Tabs,
-  Tab,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
   FormGroup,
   FormControlLabel,
-  Checkbox
+  Checkbox,
+  Card,
+  CardHeader,
+  CardContent,
+  Tooltip,
+  Badge,
+  Switch
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -39,7 +46,15 @@ import {
   DragIndicator as DragIcon,
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
-  FitnessCenter as FitnessCenterIcon
+  FitnessCenter as FitnessCenterIcon,
+  ExpandMore as ExpandMoreIcon,
+  Edit as EditIcon,
+  Settings as SettingsIcon,
+  Tune as TuneIcon,
+  FilterList as FilterListIcon,
+  MoveUp as MoveUpIcon,
+  MoveDown as MoveDownIcon,
+  SwapVert as SwapVertIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { workoutPlansApi, handleApiError } from '../utils/api';
@@ -77,9 +92,30 @@ const CreateWorkoutPlan = () => {
   const [currentExercise, setCurrentExercise] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formErrors, setFormErrors] = useState({});
-  const [currentTab, setCurrentTab] = useState(0);
+  
+  // New state for accordion UI
+  const [expandedDay, setExpandedDay] = useState(null);
+  
+  // Batch operations state
+  const [selectedExerciseIds, setSelectedExerciseIds] = useState([]);
   const [batchConfigOpen, setBatchConfigOpen] = useState(false);
-  const [batchConfigDay, setBatchConfigDay] = useState(null);
+  const [batchConfigValues, setBatchConfigValues] = useState({
+    sets: 3,
+    reps: 10,
+    rest_seconds: 60,
+    target_weight: 0,
+    day_of_week: null
+  });
+  const [batchConfigFields, setBatchConfigFields] = useState({
+    sets: false,
+    reps: false,
+    rest_seconds: false,
+    target_weight: false,
+    day_of_week: false
+  });
+  
+  // Current day for adding exercises
+  const [currentAddDay, setCurrentAddDay] = useState(null);
   
   // Handle form field changes
   const handleNameChange = (e) => {
@@ -104,51 +140,153 @@ const CreateWorkoutPlan = () => {
     });
   };
 
-  // Handle tab change
-  const handleTabChange = (event, newValue) => {
-    setCurrentTab(newValue);
-  };
-  
-  // Get current day based on tab index
-  const getCurrentDay = () => {
-    // First tab (index 0) is for unassigned exercises
-    if (currentTab === 0) {
-      return null;
-    }
-    // Otherwise, get the day value from selectedDays array
-    // Subtract 1 because first tab is unassigned, so day tabs start at index 1
-    return selectedDays[currentTab - 1];
-  };
-  
   // Open exercise selector
-  const handleAddExercises = () => {
+  const handleAddExercises = (dayOfWeek = null) => {
+    setCurrentAddDay(dayOfWeek);
     setSelectorOpen(true);
+  };
+  
+  // Handle accordion expansion
+  const handleAccordionChange = (day) => (event, isExpanded) => {
+    setExpandedDay(isExpanded ? day : null);
+  };
+  
+  // Toggle exercise selection for batch operations
+  const handleToggleExerciseSelection = (exerciseId) => {
+    setSelectedExerciseIds(prev => {
+      if (prev.includes(exerciseId)) {
+        return prev.filter(id => id !== exerciseId);
+      } else {
+        return [...prev, exerciseId];
+      }
+    });
+  };
+  
+  // Select all exercises for a specific day
+  const handleSelectAllForDay = (day) => {
+    const dayExercises = exercises.filter(ex => ex.day_of_week === day);
+    const dayExerciseIds = dayExercises.map(ex => ex.id);
+    
+    if (dayExerciseIds.every(id => selectedExerciseIds.includes(id))) {
+      // If all are selected, deselect all
+      setSelectedExerciseIds(prev => prev.filter(id => !dayExerciseIds.includes(id)));
+    } else {
+      // Otherwise, select all
+      setSelectedExerciseIds(prev => [...prev, ...dayExerciseIds.filter(id => !prev.includes(id))]);
+    }
+  };
+  
+  // Clear all exercise selections
+  const handleClearExerciseSelection = () => {
+    setSelectedExerciseIds([]);
+  };
+  
+  // Open batch configuration dialog
+  const handleOpenBatchConfig = () => {
+    // Set default values based on first selected exercise
+    if (selectedExerciseIds.length > 0) {
+      const firstExercise = exercises.find(ex => ex.id === selectedExerciseIds[0]);
+      if (firstExercise) {
+        setBatchConfigValues({
+          sets: firstExercise.sets,
+          reps: firstExercise.reps,
+          rest_seconds: firstExercise.rest_seconds,
+          target_weight: firstExercise.target_weight,
+          day_of_week: firstExercise.day_of_week
+        });
+      }
+    }
+    
+    // Reset field selection
+    setBatchConfigFields({
+      sets: false,
+      reps: false,
+      rest_seconds: false,
+      target_weight: false,
+      day_of_week: false
+    });
+    
+    setBatchConfigOpen(true);
+  };
+  
+  // Update batch configuration values
+  const handleBatchConfigValueChange = (field, value) => {
+    setBatchConfigValues(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Toggle which fields to apply in batch update
+  const handleBatchConfigFieldToggle = (field) => {
+    setBatchConfigFields(prev => ({
+      ...prev,
+      [field]: !prev[field]
+    }));
+  };
+  
+  // Apply batch configuration to selected exercises
+  const handleSaveBatchConfig = () => {
+    const updatedExercises = exercises.map(exercise => {
+      if (!selectedExerciseIds.includes(exercise.id)) {
+        return exercise;
+      }
+      
+      // Apply only selected fields
+      const updates = {};
+      Object.keys(batchConfigFields).forEach(field => {
+        if (batchConfigFields[field]) {
+          updates[field] = batchConfigValues[field];
+        }
+      });
+      
+      return { ...exercise, ...updates };
+    });
+    
+    setExercises(updatedExercises);
+    setBatchConfigOpen(false);
+  };
+  
+  // Move selected exercises to a different day
+  const handleMoveSelectedExercises = (targetDay) => {
+    const updatedExercises = exercises.map(exercise => {
+      if (selectedExerciseIds.includes(exercise.id)) {
+        return { ...exercise, day_of_week: targetDay };
+      }
+      return exercise;
+    });
+    
+    setExercises(updatedExercises);
+    setSelectedExerciseIds([]);
+  };
+  
+  // Get exercises for a specific day
+  const getExercisesForDay = (day) => {
+    return exercises.filter(exercise => exercise.day_of_week === day);
+  };
+  
+  // Get unassigned exercises
+  const getUnassignedExercises = () => {
+    return exercises.filter(exercise => !exercise.day_of_week);
   };
   
   // Handle selected exercises from selector
   const handleExercisesSelected = (selectedExercises) => {
-    const currentDay = getCurrentDay();
-    
-    // Add default values for new exercises
-    const newExercises = selectedExercises.map((exercise) => ({
-      ...exercise,
-      sets: 3,
-      reps: 10,
-      rest_seconds: 60,
-      target_weight: 0,
-      notes: '',
-      day_of_week: currentDay,
-      // If the exercise already exists, don't add it again
-      ...(exercises.find(e => e.id === exercise.id) || {})
-    }));
+    // Exercises are now fully configured with sets, reps, weights, and day assignments
+    // from the ExerciseSelector component
     
     // Merge with existing exercises, preventing duplicates
     const mergedExercises = [
-      ...exercises.filter(existing => !newExercises.some(newEx => newEx.id === existing.id)),
-      ...newExercises
+      ...exercises.filter(existing => !selectedExercises.some(newEx => newEx.id === existing.id)),
+      ...selectedExercises
     ];
     
     setExercises(mergedExercises);
+    
+    // If adding to a specific day's accordion, expand that day
+    if (currentAddDay !== null) {
+      setExpandedDay(currentAddDay);
+    }
   };
   
   // Configure an exercise (sets, reps, rest)
@@ -175,27 +313,16 @@ const CreateWorkoutPlan = () => {
     }));
   };
   
-  // Open batch configuration dialog
-  const handleOpenBatchConfig = (day) => {
-    setBatchConfigDay(day);
-    setBatchConfigOpen(true);
-  };
-  
-  // Handle batch exercise configuration
-  const handleBatchConfigChange = (field, value) => {
-    // This will update all exercises for the selected day with the same value
-    // Only if the checkbox for that field is checked
-  };
-  
-  // Save batch configuration
-  const handleSaveBatchConfig = () => {
-    // Apply batch changes to all exercises for the selected day
-    setBatchConfigOpen(false);
-  };
-  
   // Remove an exercise from the plan
   const handleRemoveExercise = (exerciseId) => {
     setExercises(prevExercises => prevExercises.filter(ex => ex.id !== exerciseId));
+    setSelectedExerciseIds(prev => prev.filter(id => id !== exerciseId));
+  };
+  
+  // Remove selected exercises
+  const handleRemoveSelectedExercises = () => {
+    setExercises(prevExercises => prevExercises.filter(ex => !selectedExerciseIds.includes(ex.id)));
+    setSelectedExerciseIds([]);
   };
   
   // Handle reordering exercises via drag and drop
@@ -307,18 +434,6 @@ const CreateWorkoutPlan = () => {
     navigate('/workout-plans');
   };
   
-  // Get exercises for the current tab (day)
-  const getCurrentTabExercises = () => {
-    const currentDay = getCurrentDay();
-    if (currentDay === null) {
-      // Unassigned tab
-      return exercises.filter(exercise => !exercise.day_of_week);
-    } else {
-      // Day-specific tab
-      return exercises.filter(exercise => exercise.day_of_week === currentDay);
-    }
-  };
-  
   // Get weekday name from value
   const getWeekdayName = (value) => {
     const day = WEEKDAYS.find(d => d.value === value);
@@ -410,6 +525,136 @@ const CreateWorkoutPlan = () => {
         <Button onClick={() => setExerciseConfigOpen(false)}>Cancel</Button>
         <Button onClick={handleSaveExerciseConfig} variant="contained" color="primary">
           Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+  
+  // Batch configuration dialog
+  const batchConfigDialog = (
+    <Dialog open={batchConfigOpen} onClose={() => setBatchConfigOpen(false)} maxWidth="md" fullWidth>
+      <DialogTitle>
+        Batch Configure Exercises ({selectedExerciseIds.length} selected)
+      </DialogTitle>
+      <DialogContent dividers>
+        <Grid container spacing={3}>
+          <Grid item xs={12}>
+            <Alert severity="info" sx={{ mb: 2 }}>
+              Select which properties to update and set their values. Only checked properties will be changed.
+            </Alert>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.sets} 
+                onChange={() => handleBatchConfigFieldToggle('sets')}
+              />
+              <Typography>Sets</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.sets}
+              onChange={(e) => handleBatchConfigValueChange('sets', Math.max(1, parseInt(e.target.value) || 1))}
+              InputProps={{ inputProps: { min: 1 } }}
+              disabled={!batchConfigFields.sets}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.reps} 
+                onChange={() => handleBatchConfigFieldToggle('reps')}
+              />
+              <Typography>Reps</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.reps}
+              onChange={(e) => handleBatchConfigValueChange('reps', Math.max(1, parseInt(e.target.value) || 1))}
+              InputProps={{ inputProps: { min: 1 } }}
+              disabled={!batchConfigFields.reps}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.rest_seconds} 
+                onChange={() => handleBatchConfigFieldToggle('rest_seconds')}
+              />
+              <Typography>Rest (seconds)</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.rest_seconds}
+              onChange={(e) => handleBatchConfigValueChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
+              InputProps={{ inputProps: { min: 0 } }}
+              disabled={!batchConfigFields.rest_seconds}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.target_weight} 
+                onChange={() => handleBatchConfigFieldToggle('target_weight')}
+              />
+              <Typography>Target Weight</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.target_weight}
+              onChange={(e) => handleBatchConfigValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
+              InputProps={{ 
+                inputProps: { min: 0, step: 0.5 },
+                endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
+              }}
+              disabled={!batchConfigFields.target_weight}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.day_of_week} 
+                onChange={() => handleBatchConfigFieldToggle('day_of_week')}
+              />
+              <Typography>Workout Day</Typography>
+            </Box>
+            <FormControl fullWidth disabled={!batchConfigFields.day_of_week}>
+              <InputLabel id="batch-day-of-week-label">Workout Day</InputLabel>
+              <Select
+                labelId="batch-day-of-week-label"
+                value={batchConfigValues.day_of_week || ''}
+                onChange={(e) => handleBatchConfigValueChange('day_of_week', e.target.value)}
+                label="Workout Day"
+              >
+                <MenuItem value="">Not assigned</MenuItem>
+                {selectedDays.map((day) => (
+                  <MenuItem key={day} value={day}>
+                    {getWeekdayName(day)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Grid>
+        </Grid>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setBatchConfigOpen(false)}>Cancel</Button>
+        <Button 
+          onClick={handleSaveBatchConfig} 
+          variant="contained" 
+          color="primary"
+          disabled={!Object.values(batchConfigFields).some(Boolean)}
+        >
+          Apply Changes
         </Button>
       </DialogActions>
     </Dialog>
@@ -518,9 +763,20 @@ const CreateWorkoutPlan = () => {
       
       {/* Exercises section */}
       <Paper sx={{ mb: 3, p: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Exercises ({exercises.length})
-        </Typography>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+          <Typography variant="h6" component="h2">
+            Exercises ({exercises.length})
+          </Typography>
+          
+          <Button
+            startIcon={<AddIcon />}
+            variant="outlined"
+            onClick={() => handleAddExercises(null)}
+            disabled={isLoading || selectedDays.length === 0}
+          >
+            Add Exercises
+          </Button>
+        </Box>
         
         {formErrors.exercises && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -528,127 +784,293 @@ const CreateWorkoutPlan = () => {
           </Alert>
         )}
         
-        {/* Only show tabs if days are selected */}
+        {/* Only show content if days are selected */}
         {selectedDays.length > 0 ? (
-          <Box sx={{ width: '100%', mb: 3 }}>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-              <Tabs 
-                value={currentTab} 
-                onChange={handleTabChange}
-                variant="scrollable"
-                scrollButtons="auto"
-              >
-                <Tab label="Unassigned" />
-                {selectedDays.map((day) => (
-                  <Tab key={day} label={getWeekdayName(day)} />
-                ))}
-              </Tabs>
-            </Box>
-            
-            <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Typography variant="subtitle1">
-                {currentTab === 0 
-                  ? "Unassigned Exercises" 
-                  : `${getWeekdayName(selectedDays[currentTab - 1])} Exercises`}
-                {` (${getCurrentTabExercises().length})`}
-              </Typography>
-              
-              <Button
-                startIcon={<AddIcon />}
-                variant="outlined"
-                onClick={handleAddExercises}
-                disabled={isLoading}
-              >
-                Add Exercises
-              </Button>
-            </Box>
-            
-            {/* Exercise list for current tab */}
-            {getCurrentTabExercises().length === 0 ? (
-              <Box sx={{ textAlign: 'center', py: 4 }}>
-                <Typography color="text.secondary" paragraph>
-                  No exercises added for this day.
+          <>
+            {/* Batch actions section */}
+            {selectedExerciseIds.length > 0 && (
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                bgcolor: 'action.hover', 
+                p: 2, 
+                borderRadius: 1,
+                mb: 2
+              }}>
+                <Typography variant="subtitle1" sx={{ mr: 2 }}>
+                  {selectedExerciseIds.length} exercises selected
                 </Typography>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={handleAddExercises}
+                
+                <Button 
+                  size="small" 
+                  onClick={handleOpenBatchConfig}
+                  startIcon={<TuneIcon />}
+                  sx={{ mr: 1 }}
                 >
-                  Add Exercises
+                  Configure
+                </Button>
+                
+                <FormControl size="small" sx={{ minWidth: 120, mx: 1 }}>
+                  <InputLabel id="move-to-day-label">Move to</InputLabel>
+                  <Select
+                    labelId="move-to-day-label"
+                    value=""
+                    label="Move to"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        handleMoveSelectedExercises(e.target.value);
+                      }
+                    }}
+                    displayEmpty
+                  >
+                    <MenuItem value="" disabled>Select day</MenuItem>
+                    <MenuItem value={null}>Unassigned</MenuItem>
+                    {selectedDays.map(day => (
+                      <MenuItem key={day} value={day}>
+                        {getWeekdayName(day)}
+                      </MenuItem>
+                    ))}
+                  </Select>
+                </FormControl>
+                
+                <Button 
+                  size="small" 
+                  color="error" 
+                  onClick={handleRemoveSelectedExercises}
+                  startIcon={<DeleteIcon />}
+                  sx={{ mx: 1 }}
+                >
+                  Remove
+                </Button>
+                
+                <Button 
+                  size="small" 
+                  onClick={handleClearExerciseSelection}
+                  sx={{ ml: 'auto' }}
+                >
+                  Clear Selection
                 </Button>
               </Box>
-            ) : (
-              <DragDropContext onDragEnd={handleDragEnd}>
-                <Droppable droppableId="exercises">
-                  {(provided) => (
-                    <List 
-                      ref={provided.innerRef}
-                      {...provided.droppableProps}
-                      component="div"
-                      sx={{ 
-                        bgcolor: 'background.paper',
-                        border: '1px solid',
-                        borderColor: 'divider',
-                        borderRadius: 1,
-                        mb: 3
-                      }}
-                    >
-                      {getCurrentTabExercises().map((exercise, index) => (
-                        <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                          {(provided) => (
-                            <ListItem
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              divider
-                              secondaryAction={
-                                <>
-                                  <IconButton 
-                                    edge="end" 
-                                    aria-label="delete"
-                                    onClick={() => handleRemoveExercise(exercise.id)}
-                                    disabled={isLoading}
-                                  >
-                                    <DeleteIcon />
-                                  </IconButton>
-                                </>
-                              }
-                            >
-                              <ListItemIcon {...provided.dragHandleProps}>
-                                <DragIcon />
-                              </ListItemIcon>
-                              
-                              <ListItemText
-                                primary={exercise.name}
-                                secondary={
-                                  <>
-                                    {exercise.muscle_group}
-                                    <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                      {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                      {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
-                                    </Typography>
-                                  </>
-                                }
-                              />
-                              
-                              <Button
-                                size="small"
-                                onClick={() => handleConfigureExercise(exercise)}
-                                sx={{ mr: 7 }}
-                                disabled={isLoading}
-                              >
-                                Configure
-                              </Button>
-                            </ListItem>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </List>
-                  )}
-                </Droppable>
-              </DragDropContext>
             )}
-          </Box>
+            
+            {/* Unassigned exercises section */}
+            <Accordion
+              expanded={expandedDay === null}
+              onChange={handleAccordionChange(null)}
+              sx={{ mb: 2 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                    Unassigned Exercises
+                  </Typography>
+                  <Badge badgeContent={getUnassignedExercises().length} color="primary" sx={{ mr: 2 }} />
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddExercises(null);
+                    }}
+                    sx={{ mr: 2 }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+              </AccordionSummary>
+              <AccordionDetails>
+                {getUnassignedExercises().length === 0 ? (
+                  <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                    No unassigned exercises. Add exercises or assign all exercises to workout days.
+                  </Typography>
+                ) : (
+                  <Box sx={{ mb: 2 }}>
+                    {/* Select all checkbox */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Checkbox
+                        checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
+                        indeterminate={
+                          getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
+                          !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
+                        }
+                        onChange={() => handleSelectAllForDay(null)}
+                      />
+                      <Typography>Select All</Typography>
+                    </Box>
+                    
+                    {/* Exercise List */}
+                    <List>
+                      {getUnassignedExercises().map((exercise, index) => (
+                        <ListItem 
+                          key={exercise.id} 
+                          divider
+                          secondaryAction={
+                            <IconButton
+                              edge="end"
+                              onClick={() => handleRemoveExercise(exercise.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          }
+                          sx={{ 
+                            bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                            '&:hover': { bgcolor: 'action.hover' }
+                          }}
+                        >
+                          <Checkbox
+                            checked={selectedExerciseIds.includes(exercise.id)}
+                            onChange={() => handleToggleExerciseSelection(exercise.id)}
+                            edge="start"
+                          />
+                          
+                          <ListItemText
+                            primary={exercise.name}
+                            secondary={
+                              <>
+                                {exercise.muscle_group}
+                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                  {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                                </Typography>
+                              </>
+                            }
+                          />
+                          
+                          <Button
+                            size="small"
+                            onClick={() => handleConfigureExercise(exercise)}
+                            sx={{ mr: 4 }}
+                          >
+                            Configure
+                          </Button>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
+            
+            {/* Workout day sections */}
+            {selectedDays.map(day => (
+              <Accordion
+                key={day}
+                expanded={expandedDay === day}
+                onChange={handleAccordionChange(day)}
+                sx={{ mb: 2 }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                      {getWeekdayName(day)} Exercises
+                    </Typography>
+                    <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddExercises(day);
+                      }}
+                      sx={{ mr: 2 }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {getExercisesForDay(day).length === 0 ? (
+                    <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                      No exercises for {getWeekdayName(day)}. Add exercises to this day.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ mb: 2 }}>
+                      {/* Select all checkbox */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Checkbox
+                          checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
+                          indeterminate={
+                            getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
+                            !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
+                          }
+                          onChange={() => handleSelectAllForDay(day)}
+                        />
+                        <Typography>Select All</Typography>
+                      </Box>
+                      
+                      {/* Exercise List for this day */}
+                      <DragDropContext onDragEnd={handleDragEnd}>
+                        <Droppable droppableId={`day-${day}`}>
+                          {(provided) => (
+                            <List
+                              ref={provided.innerRef}
+                              {...provided.droppableProps}
+                            >
+                              {getExercisesForDay(day).map((exercise, index) => (
+                                <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+                                  {(provided) => (
+                                    <ListItem 
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      divider
+                                      secondaryAction={
+                                        <IconButton
+                                          edge="end"
+                                          onClick={() => handleRemoveExercise(exercise.id)}
+                                        >
+                                          <DeleteIcon />
+                                        </IconButton>
+                                      }
+                                      sx={{ 
+                                        bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                                        '&:hover': { bgcolor: 'action.hover' }
+                                      }}
+                                    >
+                                      <Checkbox
+                                        checked={selectedExerciseIds.includes(exercise.id)}
+                                        onChange={() => handleToggleExerciseSelection(exercise.id)}
+                                        edge="start"
+                                      />
+                                      
+                                      <ListItemIcon {...provided.dragHandleProps} sx={{ minWidth: '36px' }}>
+                                        <DragIcon />
+                                      </ListItemIcon>
+                                      
+                                      <ListItemText
+                                        primary={exercise.name}
+                                        secondary={
+                                          <>
+                                            {exercise.muscle_group}
+                                            <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                              {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                              {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                                            </Typography>
+                                          </>
+                                        }
+                                      />
+                                      
+                                      <Button
+                                        size="small"
+                                        onClick={() => handleConfigureExercise(exercise)}
+                                        sx={{ mr: 4 }}
+                                      >
+                                        Configure
+                                      </Button>
+                                    </ListItem>
+                                  )}
+                                </Draggable>
+                              ))}
+                              {provided.placeholder}
+                            </List>
+                          )}
+                        </Droppable>
+                      </DragDropContext>
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </>
         ) : (
           <Box sx={{ textAlign: 'center', py: 4 }}>
             <Typography color="text.secondary" paragraph>
@@ -664,10 +1086,14 @@ const CreateWorkoutPlan = () => {
         onClose={() => setSelectorOpen(false)}
         onSelect={handleExercisesSelected}
         selectedExerciseIds={exercises.map(e => e.id)}
+        selectedDays={selectedDays}
       />
       
       {/* Exercise configuration dialog */}
       {exerciseConfigDialog}
+      
+      {/* Batch configuration dialog */}
+      {batchConfigDialog}
       
       {/* Loading overlay */}
       {isLoading && (

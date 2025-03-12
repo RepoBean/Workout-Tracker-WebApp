@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 class UserBase(BaseModel):
@@ -14,6 +14,7 @@ class UserUpdate(BaseModel):
     email: Optional[EmailStr] = None
     password: Optional[str] = Field(None, min_length=8)
     profile_picture: Optional[str] = None
+    settings: Optional[Dict[str, Any]] = None
 
 class UserResponse(UserBase):
     id: int
@@ -21,6 +22,7 @@ class UserResponse(UserBase):
     created_at: datetime
     last_login: Optional[datetime] = None
     profile_picture: Optional[str] = None
+    settings: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

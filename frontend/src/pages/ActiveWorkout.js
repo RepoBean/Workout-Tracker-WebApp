@@ -91,21 +91,70 @@ const ActiveWorkout = () => {
         setError(null);
         
         if (isNewSession) {
+          // Get current day of week (1-7, where 1 is Monday as per ISO standard)
+          const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+          // Convert JS day (0-6, Sun-Sat) to our db format (1-7, Mon-Sun)
+          const todayDbFormat = today === 0 ? 7 : today; // Convert Sunday from 0 to 7
+          
           if (!planId) {
-            // Create a blank custom workout
-            const response = await sessionsApi.create({
-              name: 'Custom Workout',
-              status: 'in_progress',
-              start_time: new Date().toISOString()
-            });
-            setSession(response.data);
+            // Try to get active plan first
+            try {
+              const activePlanResponse = await workoutPlansApi.getActive();
+              if (activePlanResponse.data) {
+                console.log('Found active plan:', activePlanResponse.data);
+                const activePlan = activePlanResponse.data;
+                
+                // Create a session using the active plan and today's day
+                const response = await sessionsApi.create({
+                  workout_plan_id: activePlan.id,
+                  day_of_week: todayDbFormat,
+                  status: 'in_progress',
+                  start_time: new Date().toISOString()
+                });
+                
+                // If no exercises were returned, we need to handle the "no exercises for today" case
+                if (!response.data.exercises || response.data.exercises.length === 0) {
+                  setIsLoading(false);
+                  setNoExercisesForToday(true);
+                  return;
+                }
+                
+                setSession(response.data);
+              } else {
+                // No active plan, create a blank custom workout
+                const response = await sessionsApi.create({
+                  name: 'Custom Workout',
+                  status: 'in_progress',
+                  start_time: new Date().toISOString()
+                });
+                setSession(response.data);
+              }
+            } catch (error) {
+              console.error('Error fetching active plan:', error);
+              // Fallback to custom workout
+              const response = await sessionsApi.create({
+                name: 'Custom Workout',
+                status: 'in_progress',
+                start_time: new Date().toISOString()
+              });
+              setSession(response.data);
+            }
           } else {
-            // Create a session from a plan
+            // Create a session from the specified plan
             const response = await sessionsApi.create({
-              plan_id: planId,
+              workout_plan_id: planId,
+              day_of_week: todayDbFormat,
               status: 'in_progress',
               start_time: new Date().toISOString()
             });
+            
+            // If no exercises were returned, we need to handle the "no exercises for today" case
+            if (!response.data.exercises || response.data.exercises.length === 0) {
+              setIsLoading(false);
+              setNoExercisesForToday(true);
+              return;
+            }
+            
             setSession(response.data);
           }
         } else {
@@ -668,7 +717,7 @@ const ActiveWorkout = () => {
                             </Typography>
                           ) : (
                             <Typography color="text.secondary">
-                              {currentExercise.target_weight ? `Target: ${currentExercise.target_weight} {weightUnit} × ${currentExercise.target_reps} reps` : 'Ready to record'}
+                              {currentExercise.target_weight ? `Target: ${currentExercise.target_weight} ${weightUnit} × ${currentExercise.target_reps} reps` : 'Ready to record'}
                             </Typography>
                           )}
                         </Box>

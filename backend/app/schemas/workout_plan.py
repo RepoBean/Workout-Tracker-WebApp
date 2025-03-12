@@ -44,6 +44,11 @@ class PlanExerciseUpdate(BaseModel):
 class PlanExerciseResponse(PlanExerciseBase):
     id: int
     workout_plan_id: int
+    name: Optional[str] = None
+    muscle_group: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    equipment: Optional[str] = None
     
     class Config:
         from_attributes = True
@@ -73,6 +78,8 @@ class WorkoutPlanResponse(WorkoutPlanBase):
     owner_id: int
     created_at: datetime
     exercises: List[PlanExerciseResponse] = []
+    exercises_count: Optional[int] = None
     
     class Config:
-        from_attributes = True 
+        from_attributes = True
+        arbitrary_types_allowed = True 

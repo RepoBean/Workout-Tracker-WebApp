@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from typing import List
+import json
 
 from app.database import get_db
 from app.models.models import User
@@ -20,6 +21,19 @@ async def get_current_user_info(
     """
     Get information about the currently authenticated user.
     """
+    # Deserialize settings if they exist
+    if current_user.settings:
+        if isinstance(current_user.settings, dict):
+            # Already deserialized, no need to parse
+            pass
+        else:
+            try:
+                current_user.settings = json.loads(current_user.settings)
+            except json.JSONDecodeError:
+                current_user.settings = {}
+    else:
+        current_user.settings = {}
+        
     return current_user
 
 @router.patch("/me", response_model=UserResponse)
@@ -58,9 +72,21 @@ async def update_current_user(
         current_user.hashed_password = get_password_hash(user_update.password)
     if user_update.profile_picture is not None:
         current_user.profile_picture = user_update.profile_picture
+    if user_update.settings is not None:
+        # Serialize settings to JSON string for storage
+        current_user.settings = json.dumps(user_update.settings)
     
     db.commit()
     db.refresh(current_user)
+    
+    # Deserialize settings for response
+    if current_user.settings:
+        try:
+            current_user.settings = json.loads(current_user.settings)
+        except json.JSONDecodeError:
+            current_user.settings = {}
+    else:
+        current_user.settings = {}
     
     return current_user
 

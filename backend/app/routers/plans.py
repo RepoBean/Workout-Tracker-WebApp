@@ -113,7 +113,29 @@ async def get_workout_plans(
     # Paginate results
     plans = query.offset(skip).limit(limit).all()
     
-    return plans
+    # Add exercise count to each plan
+    plan_responses = []
+    for plan in plans:
+        # Count the exercises in this plan
+        exercise_count = db.query(PlanExercise).filter(PlanExercise.workout_plan_id == plan.id).count()
+        
+        # Convert plan to dict for response
+        plan_dict = {
+            "id": plan.id,
+            "name": plan.name,
+            "description": plan.description,
+            "is_public": plan.is_public,
+            "is_active": plan.is_active,
+            "days_per_week": plan.days_per_week,
+            "duration_weeks": plan.duration_weeks,
+            "owner_id": plan.owner_id,
+            "created_at": plan.created_at,
+            "exercises": [],  # We don't need the full exercise details in the list view
+            "exercises_count": exercise_count
+        }
+        plan_responses.append(plan_dict)
+    
+    return plan_responses
 
 @router.get("/next", response_model=WorkoutPlanResponse)
 async def get_next_workout_plan(
@@ -135,6 +157,24 @@ async def get_next_workout_plan(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active workout plan found"
         )
+    
+    # Count the exercises in the plan
+    exercise_count = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == active_plan.id
+    ).count()
+    
+    # Set the exercises_count field
+    active_plan.exercises_count = exercise_count
+    
+    # Load exercise details for the plan exercises
+    for plan_exercise in active_plan.exercises:
+        exercise = db.query(Exercise).filter(Exercise.id == plan_exercise.exercise_id).first()
+        if exercise:
+            plan_exercise.name = exercise.name
+            plan_exercise.muscle_group = exercise.muscle_group
+            plan_exercise.description = exercise.description
+            plan_exercise.category = exercise.category
+            plan_exercise.equipment = exercise.equipment
     
     return active_plan
 
@@ -162,6 +202,24 @@ async def get_workout_plan(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to access this workout plan"
         )
+    
+    # Count the exercises in the plan
+    exercise_count = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan.id
+    ).count()
+    
+    # Set the exercises_count field
+    plan.exercises_count = exercise_count
+    
+    # Load exercise details for the plan exercises
+    for plan_exercise in plan.exercises:
+        exercise = db.query(Exercise).filter(Exercise.id == plan_exercise.exercise_id).first()
+        if exercise:
+            plan_exercise.name = exercise.name
+            plan_exercise.muscle_group = exercise.muscle_group
+            plan_exercise.description = exercise.description
+            plan_exercise.category = exercise.category
+            plan_exercise.equipment = exercise.equipment
     
     return plan
 

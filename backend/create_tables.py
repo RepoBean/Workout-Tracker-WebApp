@@ -1,0 +1,1 @@
+from sqlalchemy import create_engine; from app.models.models import Base; DATABASE_URL = "postgresql://postgres:postgres@db:5432/workout_tracker"; engine = create_engine(DATABASE_URL); Base.metadata.create_all(bind=engine); print("Tables created successfully!")

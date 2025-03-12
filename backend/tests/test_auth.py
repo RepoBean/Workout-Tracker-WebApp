@@ -128,4 +128,29 @@ def test_login_invalid_password(client):
         }
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
-    assert "Incorrect username or password" in response.json()["detail"] 
+    assert "Incorrect username or password" in response.json()["detail"]
+
+def test_update_user_settings(client, user_headers):
+    """Test updating user settings with unit preferences"""
+    # Update settings with unit preference
+    response = client.patch(
+        "/api/users/me",
+        json={
+            "settings": {
+                "unitSystem": "imperial"
+            }
+        },
+        headers=user_headers
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["settings"]["unitSystem"] == "imperial"
+    
+    # Verify settings persist when fetching user data
+    response = client.get(
+        "/api/users/me",
+        headers=user_headers
+    )
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    assert data["settings"]["unitSystem"] == "imperial" 
