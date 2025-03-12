@@ -22,7 +22,11 @@ import {
   DialogTitle,
   Alert,
   Snackbar,
-  Grid
+  Grid,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Badge
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -30,20 +34,35 @@ import {
   PlayArrow as StartIcon,
   Check as CheckIcon,
   FitnessCenter as FitnessCenterIcon,
-  ArrowBack as ArrowBackIcon
+  ArrowBack as ArrowBackIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { workoutPlansApi, handleApiError } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
+import { useUnitSystem } from '../utils/unitUtils';
+
+// Weekday names mapping
+const WEEKDAYS = [
+  { name: 'Monday', value: 1 },
+  { name: 'Tuesday', value: 2 },
+  { name: 'Wednesday', value: 3 },
+  { name: 'Thursday', value: 4 },
+  { name: 'Friday', value: 5 },
+  { name: 'Saturday', value: 6 },
+  { name: 'Sunday', value: 7 }
+];
 
 const WorkoutPlanDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { weightUnit, convertToPreferred } = useUnitSystem();
   
   const [plan, setPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+  const [expandedDay, setExpandedDay] = useState(null);
   
   // Fetch workout plan details
   useEffect(() => {
@@ -53,6 +72,17 @@ const WorkoutPlanDetail = () => {
         setError(null);
         const response = await workoutPlansApi.getById(id);
         setPlan(response.data);
+        
+        // If there are exercises, expand the first day by default
+        if (response.data.exercises && response.data.exercises.length > 0) {
+          const days = [...new Set(response.data.exercises
+            .filter(ex => ex.day_of_week)
+            .map(ex => ex.day_of_week))].sort();
+          
+          if (days.length > 0) {
+            setExpandedDay(days[0]);
+          }
+        }
       } catch (error) {
         console.error('Error fetching workout plan:', error);
         handleApiError(error, setError, 'Failed to load workout plan details');
@@ -70,6 +100,56 @@ const WorkoutPlanDetail = () => {
   const formatDate = (dateString) => {
     if (!dateString) return 'Unknown date';
     return formatDistanceToNow(new Date(dateString), { addSuffix: true });
+  };
+  
+  // Get weekday name from value
+  const getWeekdayName = (value) => {
+    const day = WEEKDAYS.find(d => d.value === value);
+    return day ? day.name : `Day ${value}`;
+  };
+  
+  // Group exercises by day
+  const getExercisesByDay = () => {
+    if (!plan || !plan.exercises || plan.exercises.length === 0) {
+      return {};
+    }
+    
+    const exercisesByDay = {};
+    
+    // Group exercises with day assignments
+    plan.exercises
+      .filter(ex => ex.day_of_week)
+      .forEach(exercise => {
+        if (!exercisesByDay[exercise.day_of_week]) {
+          exercisesByDay[exercise.day_of_week] = [];
+        }
+        exercisesByDay[exercise.day_of_week].push(exercise);
+      });
+    
+    // Get unassigned exercises
+    const unassignedExercises = plan.exercises.filter(ex => !ex.day_of_week);
+    if (unassignedExercises.length > 0) {
+      exercisesByDay['unassigned'] = unassignedExercises;
+    }
+    
+    return exercisesByDay;
+  };
+  
+  // Count exercises by day
+  const getExerciseCountByDay = () => {
+    const exercisesByDay = getExercisesByDay();
+    const counts = {};
+    
+    Object.keys(exercisesByDay).forEach(day => {
+      counts[day] = exercisesByDay[day].length;
+    });
+    
+    return counts;
+  };
+  
+  // Handle accordion expansion change
+  const handleAccordionChange = (day) => (event, isExpanded) => {
+    setExpandedDay(isExpanded ? day : null);
   };
   
   // Handle setting this plan as active
@@ -190,6 +270,14 @@ const WorkoutPlanDetail = () => {
     );
   }
   
+  // Calculate total exercise count and group exercises by day
+  const exercisesByDay = getExercisesByDay();
+  const exerciseCountByDay = getExerciseCountByDay();
+  const totalExerciseCount = plan.exercises ? plan.exercises.length : 0;
+  const daysWithExercises = Object.keys(exercisesByDay)
+    .filter(day => day !== 'unassigned')
+    .sort((a, b) => parseInt(a) - parseInt(b));
+  
   return (
     <Box sx={{ p: 3 }}>
       {/* Header with back button, title, and actions */}
@@ -281,7 +369,7 @@ const WorkoutPlanDetail = () => {
       <Box sx={{ mb: 3 }}>
         <Typography variant="h5" component="h2" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
           <FitnessCenterIcon sx={{ mr: 1 }} />
-          Exercises ({plan.exercises?.length || 0})
+          Exercises ({totalExerciseCount})
         </Typography>
         
         {(!plan.exercises || plan.exercises.length === 0) ? (
@@ -289,47 +377,151 @@ const WorkoutPlanDetail = () => {
             This workout plan doesn't have any exercises yet. Edit the plan to add exercises.
           </Alert>
         ) : (
-          <TableContainer component={Paper}>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Order</TableCell>
-                  <TableCell>Exercise</TableCell>
-                  <TableCell>Sets</TableCell>
-                  <TableCell>Reps</TableCell>
-                  <TableCell>Rest</TableCell>
-                  <TableCell>Notes</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {plan.exercises.map((exercise, index) => (
-                  <TableRow key={exercise.id || index}>
-                    <TableCell>{exercise.order || index + 1}</TableCell>
-                    <TableCell>
-                      <Typography variant="body2" fontWeight="medium">
-                        {exercise.name}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary" display="block">
-                        {exercise.muscle_group}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>{exercise.sets}</TableCell>
-                    <TableCell>
-                      {exercise.reps || (exercise.duration ? `${exercise.duration}s` : 'N/A')}
-                    </TableCell>
-                    <TableCell>
-                      {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
-                    </TableCell>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {exercise.notes || '-'}
-                      </Typography>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
+          <Box>
+            {/* Days with exercises */}
+            {daysWithExercises.map(day => (
+              <Accordion 
+                key={day} 
+                expanded={expandedDay === parseInt(day)}
+                onChange={handleAccordionChange(parseInt(day))}
+                sx={{ mb: 2 }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  aria-controls={`day-${day}-content`}
+                  id={`day-${day}-header`}
+                  sx={{ 
+                    backgroundColor: theme => theme.palette.primary.light,
+                    color: theme => theme.palette.primary.contrastText
+                  }}
+                >
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    {getWeekdayName(parseInt(day))}
+                    <Badge 
+                      color="secondary" 
+                      badgeContent={exerciseCountByDay[day]} 
+                      sx={{ ml: 2 }}
+                    />
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold' }}>Exercise</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Sets</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Reps</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Rest</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Weight</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {exercisesByDay[day].map((exercise) => (
+                          <TableRow key={exercise.id}>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {exercise.name}
+                                </Typography>
+                                {exercise.muscle_group && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {exercise.muscle_group}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">{exercise.sets}</TableCell>
+                            <TableCell align="center">{exercise.reps}</TableCell>
+                            <TableCell align="center">
+                              {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
+                            </TableCell>
+                            <TableCell align="center">
+                              {exercise.target_weight > 0 
+                                ? `${weightUnit === 'lb' 
+                                    ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
+                                    : exercise.target_weight} ${weightUnit}`
+                                : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+            ))}
+            
+            {/* Unassigned exercises */}
+            {exercisesByDay['unassigned'] && (
+              <Accordion
+                expanded={expandedDay === 'unassigned'}
+                onChange={handleAccordionChange('unassigned')}
+                sx={{ mb: 2, opacity: 0.8 }}
+              >
+                <AccordionSummary
+                  expandIcon={<ExpandMoreIcon />}
+                  aria-controls="unassigned-content"
+                  id="unassigned-header"
+                  sx={{ backgroundColor: theme => theme.palette.grey[200] }}
+                >
+                  <Typography variant="subtitle1" fontWeight="bold">
+                    Unassigned Exercises
+                    <Badge 
+                      color="default" 
+                      badgeContent={exerciseCountByDay['unassigned']} 
+                      sx={{ ml: 2 }}
+                    />
+                  </Typography>
+                </AccordionSummary>
+                <AccordionDetails>
+                  <TableContainer>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell sx={{ fontWeight: 'bold' }}>Exercise</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Sets</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Reps</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Rest</TableCell>
+                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Weight</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {exercisesByDay['unassigned'].map((exercise) => (
+                          <TableRow key={exercise.id}>
+                            <TableCell>
+                              <Box>
+                                <Typography variant="body2" fontWeight="medium">
+                                  {exercise.name}
+                                </Typography>
+                                {exercise.muscle_group && (
+                                  <Typography variant="caption" color="text.secondary">
+                                    {exercise.muscle_group}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell align="center">{exercise.sets}</TableCell>
+                            <TableCell align="center">{exercise.reps}</TableCell>
+                            <TableCell align="center">
+                              {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
+                            </TableCell>
+                            <TableCell align="center">
+                              {exercise.target_weight > 0 
+                                ? `${weightUnit === 'lb' 
+                                    ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
+                                    : exercise.target_weight} ${weightUnit}`
+                                : '-'}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+                </AccordionDetails>
+              </Accordion>
+            )}
+          </Box>
         )}
       </Box>
       

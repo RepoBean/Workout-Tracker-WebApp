@@ -308,47 +308,51 @@ const ActiveWorkout = () => {
         throw new Error('No active workout plan found');
       }
       
-      setSession(plan);
-      
-      // Get day of week and set up today's exercises
-      const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      // Get current day of week (1-7, where 1 is Monday as per ISO standard)
       const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-      const todayName = daysOfWeek[today];
+      // Convert JS day (0-6, Sun-Sat) to our db format (1-7, Mon-Sun)
+      const todayDbFormat = today === 0 ? 7 : today; // Convert Sunday from 0 to 7
       
-      // Get exercises for today
+      console.log('Active plan:', plan);
+      console.log('Today day of week:', todayDbFormat);
+      
+      // Filter exercises for today based on day_of_week property
       let exercisesForToday = [];
       
-      if (plan.days && plan.days[todayName] && plan.days[todayName].exercises && plan.days[todayName].exercises.length > 0) {
-        exercisesForToday = plan.days[todayName].exercises.map(ex => ({
-          exercise_id: ex.exercise_id,
-          name: ex.name,
-          target_reps: ex.reps || 10,
-          target_weight: ex.weight || 0,
-          target_sets: ex.sets || 3,
-          completed_sets: 0,
-          sets: []
-        }));
+      if (plan.exercises && plan.exercises.length > 0) {
+        // Filter exercises assigned to today
+        exercisesForToday = plan.exercises
+          .filter(ex => ex.day_of_week === todayDbFormat)
+          .map(ex => ({
+            exercise_id: ex.exercise_id,
+            sets_completed: 0,
+            order: ex.order || 1
+          }));
+          
+        console.log('Exercises for today:', exercisesForToday);
       }
       
-      // If no exercises for today, show a message and offer alternatives
+      // If no exercises for today, show a message
       if (exercisesForToday.length === 0) {
         setIsLoading(false);
         setNoExercisesForToday(true);
-        // Show the no exercises message
+        
         setSnackbar({
           open: true,
           message: 'No exercises scheduled for today in your active plan.',
           severity: 'info'
         });
         
-        // We'll handle this in the UI - see the updated render section below
         return;
       }
       
-      // Create a workout session with the exercises
+      // Create a workout session with the exercises for today
       try {
+        console.log('Creating session with exercises:', exercisesForToday);
+        
         const sessionResponse = await sessionsApi.create({
           workout_plan_id: plan.id,
+          day_of_week: todayDbFormat,
           exercises: exercisesForToday
         });
         
@@ -400,27 +404,46 @@ const ActiveWorkout = () => {
   // If no session or no exercises
   if (!session || !session.exercises || session.exercises.length === 0) {
     return (
-      <Box sx={{ textAlign: 'center', py: 4 }}>
-        <Typography variant="h5" gutterBottom>
-          No exercises found
-        </Typography>
-        <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-          This workout doesn't have any exercises. Add exercises or choose a different workout plan.
-        </Typography>
-        <Button 
-          variant="contained"
-          onClick={() => navigate('/workout-plans')}
-          sx={{ mr: 2 }}
-        >
-          Choose a Workout Plan
-        </Button>
-        <Button 
-          variant="outlined"
-          onClick={() => navigate('/dashboard')}
-        >
-          Return to Dashboard
-        </Button>
-      </Box>
+      <Container maxWidth="md">
+        <Paper sx={{ p: 4, mt: 3, textAlign: 'center' }}>
+          <FitnessCenterIcon fontSize="large" color="primary" sx={{ mb: 2, fontSize: 60, opacity: 0.6 }} />
+          <Typography variant="h5" gutterBottom>
+            No Exercises Found
+          </Typography>
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: 'auto' }}>
+            No exercises were found for this workout. This may be because:
+          </Typography>
+          
+          <Box sx={{ mb: 4, textAlign: 'left', maxWidth: 600, mx: 'auto' }}>
+            <Typography component="div" variant="body1" sx={{ mb: 1 }}>
+              • The workout plan doesn't have any exercises assigned to specific days
+            </Typography>
+            <Typography component="div" variant="body1" sx={{ mb: 1 }}>
+              • The exercises aren't assigned to today's weekday ({new Date().toLocaleDateString('en-US', { weekday: 'long' })})
+            </Typography>
+            <Typography component="div" variant="body1">
+              • The workout plan configuration needs to be updated with day assignments
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Button 
+              variant="outlined"
+              onClick={() => navigate('/dashboard')}
+              startIcon={<HomeIcon />}
+            >
+              Return to Dashboard
+            </Button>
+            <Button 
+              variant="contained"
+              onClick={() => navigate('/workout-plans')}
+              startIcon={<FitnessCenterIcon />}
+            >
+              Manage Workout Plans
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
     );
   }
 
@@ -432,28 +455,63 @@ const ActiveWorkout = () => {
   if (noExercisesForToday) {
     return (
       <Container maxWidth="md">
-        <Paper sx={{ p: 3, mt: 3 }}>
-          <Typography variant="h5" gutterBottom align="center">
+        <Paper sx={{ p: 4, mt: 3, textAlign: 'center' }}>
+          <FitnessCenterIcon fontSize="large" color="primary" sx={{ mb: 2, fontSize: 60, opacity: 0.6 }} />
+          <Typography variant="h5" gutterBottom>
             No Exercises Scheduled For Today
           </Typography>
-          <Typography paragraph align="center">
-            Your active workout plan doesn't have any exercises scheduled for today.
+          <Typography variant="body1" color="text.secondary" sx={{ mb: 3, maxWidth: 600, mx: 'auto' }}>
+            Your active workout plan doesn't have any exercises scheduled for today ({new Date().toLocaleDateString('en-US', { weekday: 'long' })}).
           </Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
+          
+          <Box sx={{ mb: 4, textAlign: 'left', maxWidth: 600, mx: 'auto' }}>
+            <Typography component="div" variant="body1" sx={{ mb: 1 }}>
+              You have a few options:
+            </Typography>
+            <Typography component="div" variant="body1" sx={{ mb: 1 }}>
+              • Edit your workout plan to add exercises for today
+            </Typography>
+            <Typography component="div" variant="body1" sx={{ mb: 1 }}>
+              • Start a custom workout without using a plan
+            </Typography>
+            <Typography component="div" variant="body1">
+              • Take a rest day and come back tomorrow
+            </Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
             <Button
               variant="outlined"
               color="primary"
               startIcon={<ArrowBackIcon />}
-              onClick={() => navigate('/workout-plans')}
+              onClick={() => navigate('/dashboard')}
             >
-              Back to Workout Plans
+              Back to Dashboard
             </Button>
             <Button
               variant="contained"
               color="primary"
-              onClick={() => navigate('/workout-plans/create')}
+              startIcon={<EditIcon />}
+              onClick={() => navigate('/workout-plans')}
             >
-              Create New Workout
+              Manage Plans
+            </Button>
+            <Button
+              variant="contained"
+              color="secondary"
+              startIcon={<FitnessCenterIcon />}
+              onClick={() => {
+                // Create a blank session without a plan
+                sessionsApi.create({
+                  name: 'Custom Workout',
+                  status: 'in_progress',
+                  start_time: new Date().toISOString()
+                }).then(response => {
+                  navigate(`/workout-sessions/${response.data.id}`);
+                });
+              }}
+            >
+              Start Custom Workout
             </Button>
           </Box>
         </Paper>

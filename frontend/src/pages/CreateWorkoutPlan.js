@@ -26,7 +26,12 @@ import {
   Snackbar,
   CircularProgress,
   InputAdornment,
-  Chip
+  Chip,
+  Tabs,
+  Tab,
+  FormGroup,
+  FormControlLabel,
+  Checkbox
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -43,6 +48,17 @@ import { useAuth } from '../contexts/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { useUnitSystem } from '../utils/unitUtils';
 
+// Define weekdays with their index values (1-7, where 1 is Monday as per ISO standard)
+const WEEKDAYS = [
+  { name: 'Monday', value: 1 },
+  { name: 'Tuesday', value: 2 },
+  { name: 'Wednesday', value: 3 },
+  { name: 'Thursday', value: 4 },
+  { name: 'Friday', value: 5 },
+  { name: 'Saturday', value: 6 },
+  { name: 'Sunday', value: 7 }
+];
+
 const CreateWorkoutPlan = () => {
   const { currentUser } = useAuth();
   const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
@@ -51,7 +67,7 @@ const CreateWorkoutPlan = () => {
   // Form state
   const [planName, setPlanName] = useState('');
   const [planDescription, setPlanDescription] = useState('');
-  const [daysPerWeek, setDaysPerWeek] = useState(0);
+  const [selectedDays, setSelectedDays] = useState([]);
   const [durationWeeks, setDurationWeeks] = useState(0);
   const [exercises, setExercises] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +77,9 @@ const CreateWorkoutPlan = () => {
   const [currentExercise, setCurrentExercise] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [formErrors, setFormErrors] = useState({});
+  const [currentTab, setCurrentTab] = useState(0);
+  const [batchConfigOpen, setBatchConfigOpen] = useState(false);
+  const [batchConfigDay, setBatchConfigDay] = useState(null);
   
   // Handle form field changes
   const handleNameChange = (e) => {
@@ -73,6 +92,33 @@ const CreateWorkoutPlan = () => {
   const handleDescriptionChange = (e) => {
     setPlanDescription(e.target.value);
   };
+
+  // Handle day selection changes
+  const handleDayToggle = (dayValue) => {
+    setSelectedDays(prev => {
+      if (prev.includes(dayValue)) {
+        return prev.filter(d => d !== dayValue);
+      } else {
+        return [...prev, dayValue].sort((a, b) => a - b);
+      }
+    });
+  };
+
+  // Handle tab change
+  const handleTabChange = (event, newValue) => {
+    setCurrentTab(newValue);
+  };
+  
+  // Get current day based on tab index
+  const getCurrentDay = () => {
+    // First tab (index 0) is for unassigned exercises
+    if (currentTab === 0) {
+      return null;
+    }
+    // Otherwise, get the day value from selectedDays array
+    // Subtract 1 because first tab is unassigned, so day tabs start at index 1
+    return selectedDays[currentTab - 1];
+  };
   
   // Open exercise selector
   const handleAddExercises = () => {
@@ -81,6 +127,8 @@ const CreateWorkoutPlan = () => {
   
   // Handle selected exercises from selector
   const handleExercisesSelected = (selectedExercises) => {
+    const currentDay = getCurrentDay();
+    
     // Add default values for new exercises
     const newExercises = selectedExercises.map((exercise) => ({
       ...exercise,
@@ -89,6 +137,7 @@ const CreateWorkoutPlan = () => {
       rest_seconds: 60,
       target_weight: 0,
       notes: '',
+      day_of_week: currentDay,
       // If the exercise already exists, don't add it again
       ...(exercises.find(e => e.id === exercise.id) || {})
     }));
@@ -126,6 +175,24 @@ const CreateWorkoutPlan = () => {
     }));
   };
   
+  // Open batch configuration dialog
+  const handleOpenBatchConfig = (day) => {
+    setBatchConfigDay(day);
+    setBatchConfigOpen(true);
+  };
+  
+  // Handle batch exercise configuration
+  const handleBatchConfigChange = (field, value) => {
+    // This will update all exercises for the selected day with the same value
+    // Only if the checkbox for that field is checked
+  };
+  
+  // Save batch configuration
+  const handleSaveBatchConfig = () => {
+    // Apply batch changes to all exercises for the selected day
+    setBatchConfigOpen(false);
+  };
+  
   // Remove an exercise from the plan
   const handleRemoveExercise = (exerciseId) => {
     setExercises(prevExercises => prevExercises.filter(ex => ex.id !== exerciseId));
@@ -160,6 +227,10 @@ const CreateWorkoutPlan = () => {
       errors.exercises = 'At least one exercise is required';
     }
     
+    if (selectedDays.length === 0) {
+      errors.days = 'Please select at least one workout day';
+    }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -184,11 +255,11 @@ const CreateWorkoutPlan = () => {
       }));
       
       // Convert weights to metric for storage if user preference is imperial
-      let daysWithConvertedWeights = [...exerciseData];
+      let exercisesWithConvertedWeights = [...exerciseData];
       
       if (weightUnit === 'lb') {
         // Convert weights to kg for storage
-        daysWithConvertedWeights = daysWithConvertedWeights.map(exercise => ({
+        exercisesWithConvertedWeights = exercisesWithConvertedWeights.map(exercise => ({
           ...exercise,
           target_weight: convertFromPreferred(parseFloat(exercise.target_weight || 0) || 0, 'kg')
         }));
@@ -198,9 +269,9 @@ const CreateWorkoutPlan = () => {
         name: planName,
         description: planDescription,
         is_public: true,
-        days_per_week: daysPerWeek,
+        days_per_week: selectedDays.length,
         duration_weeks: durationWeeks,
-        exercises: daysWithConvertedWeights
+        exercises: exercisesWithConvertedWeights
       };
       
       await workoutPlansApi.create(planData);
@@ -234,6 +305,24 @@ const CreateWorkoutPlan = () => {
   // Navigate back to workout plans
   const handleBack = () => {
     navigate('/workout-plans');
+  };
+  
+  // Get exercises for the current tab (day)
+  const getCurrentTabExercises = () => {
+    const currentDay = getCurrentDay();
+    if (currentDay === null) {
+      // Unassigned tab
+      return exercises.filter(exercise => !exercise.day_of_week);
+    } else {
+      // Day-specific tab
+      return exercises.filter(exercise => exercise.day_of_week === currentDay);
+    }
+  };
+  
+  // Get weekday name from value
+  const getWeekdayName = (value) => {
+    const day = WEEKDAYS.find(d => d.value === value);
+    return day ? day.name : `Day ${value}`;
   };
   
   // Exercise configuration dialog
@@ -304,14 +393,12 @@ const CreateWorkoutPlan = () => {
                     onChange={(e) => handleExerciseConfigChange('day_of_week', e.target.value)}
                     label="Workout Day"
                   >
-                    <MenuItem value="">Not specified</MenuItem>
-                    <MenuItem value={1}>Day 1</MenuItem>
-                    <MenuItem value={2}>Day 2</MenuItem>
-                    <MenuItem value={3}>Day 3</MenuItem>
-                    <MenuItem value={4}>Day 4</MenuItem>
-                    <MenuItem value={5}>Day 5</MenuItem>
-                    <MenuItem value={6}>Day 6</MenuItem>
-                    <MenuItem value={7}>Day 7</MenuItem>
+                    <MenuItem value="">Not assigned</MenuItem>
+                    {selectedDays.map((day) => (
+                      <MenuItem key={day} value={day}>
+                        {getWeekdayName(day)}
+                      </MenuItem>
+                    ))}
                   </Select>
                 </FormControl>
               </Grid>
@@ -389,16 +476,30 @@ const CreateWorkoutPlan = () => {
             />
           </Grid>
           
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Days Per Week"
-              type="number"
-              fullWidth
-              value={daysPerWeek}
-              onChange={(e) => setDaysPerWeek(Math.max(0, parseInt(e.target.value) || 0))}
-              InputProps={{ inputProps: { min: 0, max: 7 } }}
-              helperText="How many days per week this plan requires (0 for flexible)"
-            />
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" gutterBottom>
+              Workout Days
+            </Typography>
+            {formErrors.days && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {formErrors.days}
+              </Alert>
+            )}
+            <FormGroup row>
+              {WEEKDAYS.map((day) => (
+                <FormControlLabel
+                  key={day.value}
+                  control={
+                    <Checkbox
+                      checked={selectedDays.includes(day.value)}
+                      onChange={() => handleDayToggle(day.value)}
+                      disabled={isLoading}
+                    />
+                  }
+                  label={day.name}
+                />
+              ))}
+            </FormGroup>
           </Grid>
           
           <Grid item xs={12} sm={6}>
@@ -417,20 +518,9 @@ const CreateWorkoutPlan = () => {
       
       {/* Exercises section */}
       <Paper sx={{ mb: 3, p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="h2">
-            Exercises ({exercises.length})
-          </Typography>
-          
-          <Button
-            startIcon={<AddIcon />}
-            variant="outlined"
-            onClick={handleAddExercises}
-            disabled={isLoading}
-          >
-            Add Exercises
-          </Button>
-        </Box>
+        <Typography variant="h6" component="h2" gutterBottom>
+          Exercises ({exercises.length})
+        </Typography>
         
         {formErrors.exercises && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -438,190 +528,133 @@ const CreateWorkoutPlan = () => {
           </Alert>
         )}
         
-        {/* Weekly Structure View */}
-        {exercises.length > 0 && daysPerWeek > 0 && (
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="subtitle1" gutterBottom>
-              Weekly Structure
-            </Typography>
+        {/* Only show tabs if days are selected */}
+        {selectedDays.length > 0 ? (
+          <Box sx={{ width: '100%', mb: 3 }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+              <Tabs 
+                value={currentTab} 
+                onChange={handleTabChange}
+                variant="scrollable"
+                scrollButtons="auto"
+              >
+                <Tab label="Unassigned" />
+                {selectedDays.map((day) => (
+                  <Tab key={day} label={getWeekdayName(day)} />
+                ))}
+              </Tabs>
+            </Box>
             
-            <Grid container spacing={2}>
-              {Array.from({ length: daysPerWeek }, (_, i) => i + 1).map((day) => {
-                const dayExercises = exercises.filter(ex => ex.day_of_week === day);
-                return (
-                  <Grid item xs={12} sm={6} md={4} key={`day-${day}`}>
-                    <Paper 
-                      variant="outlined" 
+            <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Typography variant="subtitle1">
+                {currentTab === 0 
+                  ? "Unassigned Exercises" 
+                  : `${getWeekdayName(selectedDays[currentTab - 1])} Exercises`}
+                {` (${getCurrentTabExercises().length})`}
+              </Typography>
+              
+              <Button
+                startIcon={<AddIcon />}
+                variant="outlined"
+                onClick={handleAddExercises}
+                disabled={isLoading}
+              >
+                Add Exercises
+              </Button>
+            </Box>
+            
+            {/* Exercise list for current tab */}
+            {getCurrentTabExercises().length === 0 ? (
+              <Box sx={{ textAlign: 'center', py: 4 }}>
+                <Typography color="text.secondary" paragraph>
+                  No exercises added for this day.
+                </Typography>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={handleAddExercises}
+                >
+                  Add Exercises
+                </Button>
+              </Box>
+            ) : (
+              <DragDropContext onDragEnd={handleDragEnd}>
+                <Droppable droppableId="exercises">
+                  {(provided) => (
+                    <List 
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      component="div"
                       sx={{ 
-                        p: 2, 
-                        height: '100%',
-                        backgroundColor: theme => theme.palette.grey[50]
+                        bgcolor: 'background.paper',
+                        border: '1px solid',
+                        borderColor: 'divider',
+                        borderRadius: 1,
+                        mb: 3
                       }}
                     >
-                      <Typography variant="h6" gutterBottom>
-                        Day {day}
-                      </Typography>
-                      
-                      {dayExercises.length === 0 ? (
-                        <Typography variant="body2" color="text.secondary">
-                          No exercises assigned to this day
-                        </Typography>
-                      ) : (
-                        <List dense disablePadding>
-                          {dayExercises.map((exercise) => (
-                            <ListItem key={exercise.id} disablePadding sx={{ py: 0.5 }}>
-                              <ListItemIcon sx={{ minWidth: 36 }}>
-                                <FitnessCenterIcon fontSize="small" />
+                      {getCurrentTabExercises().map((exercise, index) => (
+                        <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+                          {(provided) => (
+                            <ListItem
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              divider
+                              secondaryAction={
+                                <>
+                                  <IconButton 
+                                    edge="end" 
+                                    aria-label="delete"
+                                    onClick={() => handleRemoveExercise(exercise.id)}
+                                    disabled={isLoading}
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </>
+                              }
+                            >
+                              <ListItemIcon {...provided.dragHandleProps}>
+                                <DragIcon />
                               </ListItemIcon>
-                              <ListItemText 
+                              
+                              <ListItemText
                                 primary={exercise.name}
-                                secondary={`${exercise.sets}×${exercise.reps}`}
-                                primaryTypographyProps={{ variant: 'body2' }}
-                                secondaryTypographyProps={{ variant: 'caption' }}
+                                secondary={
+                                  <>
+                                    {exercise.muscle_group}
+                                    <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                      {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                      {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                                    </Typography>
+                                  </>
+                                }
                               />
-                            </ListItem>
-                          ))}
-                        </List>
-                      )}
-                    </Paper>
-                  </Grid>
-                );
-              })}
-              
-              {/* Unassigned exercises */}
-              {exercises.some(ex => !ex.day_of_week) && (
-                <Grid item xs={12} sm={6} md={4}>
-                  <Paper 
-                    variant="outlined" 
-                    sx={{ 
-                      p: 2, 
-                      height: '100%',
-                      backgroundColor: theme => theme.palette.grey[100]
-                    }}
-                  >
-                    <Typography variant="h6" gutterBottom color="text.secondary">
-                      Unassigned
-                    </Typography>
-                    
-                    <List dense disablePadding>
-                      {exercises.filter(ex => !ex.day_of_week).map((exercise) => (
-                        <ListItem key={exercise.id} disablePadding sx={{ py: 0.5 }}>
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            <FitnessCenterIcon fontSize="small" />
-                          </ListItemIcon>
-                          <ListItemText 
-                            primary={exercise.name}
-                            secondary={`${exercise.sets}×${exercise.reps}`}
-                            primaryTypographyProps={{ variant: 'body2' }}
-                            secondaryTypographyProps={{ variant: 'caption' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                  </Paper>
-                </Grid>
-              )}
-            </Grid>
-          </Box>
-        )}
-        
-        {/* Exercise list with drag and drop */}
-        {exercises.length === 0 ? (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography color="text.secondary" paragraph>
-              No exercises added yet.
-            </Typography>
-            <Button
-              variant="outlined"
-              startIcon={<AddIcon />}
-              onClick={handleAddExercises}
-            >
-              Add Exercises
-            </Button>
-          </Box>
-        ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="exercises">
-              {(provided) => (
-                <List 
-                  ref={provided.innerRef}
-                  {...provided.droppableProps}
-                  component="div"
-                  sx={{ 
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    mb: 3
-                  }}
-                >
-                  {exercises.map((exercise, index) => (
-                    <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                      {(provided) => (
-                        <ListItem
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          divider
-                          secondaryAction={
-                            <>
-                              <IconButton 
-                                edge="end" 
-                                aria-label="delete"
-                                onClick={() => handleRemoveExercise(exercise.id)}
+                              
+                              <Button
+                                size="small"
+                                onClick={() => handleConfigureExercise(exercise)}
+                                sx={{ mr: 7 }}
                                 disabled={isLoading}
                               >
-                                <DeleteIcon />
-                              </IconButton>
-                            </>
-                          }
-                        >
-                          <ListItemIcon {...provided.dragHandleProps}>
-                            <DragIcon />
-                          </ListItemIcon>
-                          
-                          <ListItemText
-                            primary={
-                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                {exercise.name}
-                                {exercise.day_of_week && (
-                                  <Chip 
-                                    label={`Day ${exercise.day_of_week}`} 
-                                    size="small" 
-                                    sx={{ ml: 1 }}
-                                    color="primary"
-                                    variant="outlined"
-                                  />
-                                )}
-                              </Box>
-                            }
-                            secondary={
-                              <>
-                                {exercise.muscle_group}
-                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                  {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
-                                </Typography>
-                              </>
-                            }
-                          />
-                          
-                          <Button
-                            size="small"
-                            onClick={() => handleConfigureExercise(exercise)}
-                            sx={{ mr: 7 }}
-                            disabled={isLoading}
-                          >
-                            Configure
-                          </Button>
-                        </ListItem>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </List>
-              )}
-            </Droppable>
-          </DragDropContext>
+                                Configure
+                              </Button>
+                            </ListItem>
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                    </List>
+                  )}
+                </Droppable>
+              </DragDropContext>
+            )}
+          </Box>
+        ) : (
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography color="text.secondary" paragraph>
+              Please select workout days before adding exercises.
+            </Typography>
+          </Box>
         )}
       </Paper>
       
