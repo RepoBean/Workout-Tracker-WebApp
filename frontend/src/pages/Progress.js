@@ -3,8 +3,6 @@ import {
   Box, 
   Typography, 
   Grid, 
-  Card, 
-  CardContent, 
   CircularProgress, 
   Tabs, 
   Tab, 
@@ -19,7 +17,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Divider,
   Alert,
   Button
 } from '@mui/material';
@@ -42,6 +39,9 @@ import {
   BarElement,
 } from 'chart.js';
 import { Line, Bar } from 'react-chartjs-2';
+import { useAuth } from '../contexts/AuthContext';
+import { useUnitSystem } from '../utils/unitUtils';
+import LoadingScreen from '../components/LoadingScreen';
 
 // Register ChartJS components
 ChartJS.register(
@@ -56,6 +56,8 @@ ChartJS.register(
 );
 
 const Progress = () => {
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred } = useUnitSystem();
   const [activeTab, setActiveTab] = useState(0);
   const [exercises, setExercises] = useState([]);
   const [selectedExercise, setSelectedExercise] = useState('');
@@ -124,19 +126,30 @@ const Progress = () => {
         setIsLoading(prev => ({ ...prev, records: true }));
         const response = await progressApi.getPersonalRecords();
         
+        let records = response.data;
+        
+        // Convert weights if needed
+        if (weightUnit === 'lb') {
+          records = records.map(record => ({
+            ...record,
+            weight: convertToPreferred(record.weight, 'kg')
+          }));
+        }
+        
         setProgressData(prev => ({
           ...prev,
-          personalRecords: response.data
+          personalRecords: records
         }));
       } catch (error) {
         console.error('Error fetching personal records:', error);
+        setError('Failed to load personal records');
       } finally {
         setIsLoading(prev => ({ ...prev, records: false }));
       }
     };
 
     fetchPersonalRecords();
-  }, []);
+  }, [weightUnit, convertToPreferred]);
 
   // Fetch progress data when selected exercise changes
   useEffect(() => {
@@ -147,20 +160,40 @@ const Progress = () => {
         setIsLoading(prev => ({ ...prev, progress: true }));
         const response = await progressApi.getExerciseProgress(selectedExercise);
         
+        let progressData = response.data;
+        
+        // Convert weights to preferred unit if using imperial
+        if (weightUnit === 'lb') {
+          progressData = {
+            ...progressData,
+            weights: progressData.weights.map(w => convertToPreferred(w, 'kg')),
+            chartData: {
+              ...progressData.chartData,
+              datasets: progressData.chartData.datasets.map(dataset => ({
+                ...dataset,
+                data: dataset.data.map(value => convertToPreferred(value, 'kg'))
+              }))
+            }
+          };
+        }
+        
         setProgressData(prev => ({
           ...prev,
-          weightProgress: response.data.weight_progress || [],
-          volumeProgress: response.data.volume_progress || []
+          weightProgress: progressData.weights || [],
+          volumeProgress: progressData.volume_progress || [],
+          weights: progressData.weights || [],
+          chartData: progressData.chartData || {}
         }));
       } catch (error) {
         console.error('Error fetching exercise progress:', error);
+        setError('Failed to load exercise progress data');
       } finally {
         setIsLoading(prev => ({ ...prev, progress: false }));
       }
     };
 
     fetchProgressData();
-  }, [selectedExercise]);
+  }, [selectedExercise, weightUnit, convertToPreferred]);
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
@@ -211,8 +244,8 @@ const Progress = () => {
       labels: progressData.weightProgress.map(item => formatDate(item.date)),
       datasets: [
         {
-          label: 'Weight (kg)',
-          data: progressData.weightProgress.map(item => item.weight),
+          label: `Weight (${weightUnit})`,
+          data: progressData.weights,
           fill: false,
           backgroundColor: 'rgba(75,192,192,0.4)',
           borderColor: 'rgba(75,192,192,1)',
@@ -246,7 +279,7 @@ const Progress = () => {
           beginAtZero: false,
           title: {
             display: true,
-            text: 'Weight (kg)'
+            text: `Weight (${weightUnit})`
           }
         }
       }
@@ -413,7 +446,7 @@ const Progress = () => {
           <TableHead>
             <TableRow>
               <TableCell>Exercise</TableCell>
-              <TableCell align="right">Weight (kg)</TableCell>
+              <TableCell align="right">Weight ({weightUnit})</TableCell>
               <TableCell align="right">Reps</TableCell>
               <TableCell align="right">Date</TableCell>
             </TableRow>
@@ -433,7 +466,7 @@ const Progress = () => {
                 </TableCell>
                 <TableCell align="right">
                   <Typography variant="body2" fontWeight="bold">
-                    {record.weight}
+                    {record.weight} {weightUnit}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">{record.reps}</TableCell>

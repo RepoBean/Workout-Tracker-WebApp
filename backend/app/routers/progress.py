@@ -287,86 +287,99 @@ async def get_workout_frequency(
         }
     }
 
-@router.get("/personal-records")
+@router.get("/records")
 async def get_personal_records(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get personal records for all exercises.
+    Get personal records for all exercises the user has performed.
     """
-    # Get all exercises the user has performed
-    exercises_query = (
+    # Get all exercises user has performed
+    performed_exercises = (
         db.query(Exercise)
         .join(SessionExercise, Exercise.id == SessionExercise.exercise_id)
         .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
         .filter(WorkoutSession.user_id == current_user.id)
         .distinct()
-    )
-    
-    exercises = exercises_query.all()
+    ).all()
     
     records = []
-    for exercise in exercises:
-        # Get max weight for this exercise
-        max_weight_query = (
-            db.query(func.max(ExerciseSet.weight).label("max_weight"))
-            .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
-            .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-            .filter(
-                WorkoutSession.user_id == current_user.id,
-                SessionExercise.exercise_id == exercise.id,
-                ExerciseSet.is_warmup == False
-            )
-        )
-        max_weight_result = max_weight_query.first()
-        max_weight = max_weight_result.max_weight if max_weight_result.max_weight else 0
-        
-        # Get max reps for this exercise
-        max_reps_query = (
-            db.query(func.max(ExerciseSet.reps).label("max_reps"))
-            .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
-            .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-            .filter(
-                WorkoutSession.user_id == current_user.id,
-                SessionExercise.exercise_id == exercise.id,
-                ExerciseSet.is_warmup == False
-            )
-        )
-        max_reps_result = max_reps_query.first()
-        max_reps = max_reps_result.max_reps if max_reps_result.max_reps else 0
-        
-        # Get max volume (weight * reps) for this exercise in a single set
-        max_volume_query = (
-            db.query(func.max(ExerciseSet.weight * ExerciseSet.reps).label("max_volume"))
-            .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
-            .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-            .filter(
-                WorkoutSession.user_id == current_user.id,
-                SessionExercise.exercise_id == exercise.id,
-                ExerciseSet.is_warmup == False
-            )
-        )
-        max_volume_result = max_volume_query.first()
-        max_volume = max_volume_result.max_volume if max_volume_result.max_volume else 0
-        
-        records.append({
-            "exercise": {
-                "id": exercise.id,
-                "name": exercise.name,
-                "category": exercise.category
-            },
-            "max_weight": max_weight,
-            "max_reps": max_reps,
-            "max_volume": max_volume
-        })
     
-    # Sort by category then name
-    records.sort(key=lambda x: (x["exercise"]["category"] or "", x["exercise"]["name"]))
+    for exercise in performed_exercises:
+        # Query for max weight set for this exercise
+        max_weight_set = (
+            db.query(ExerciseSet)
+            .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
+            .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
+            .filter(
+                WorkoutSession.user_id == current_user.id,
+                SessionExercise.exercise_id == exercise.id,
+                ExerciseSet.is_warmup == False
+            )
+            .order_by(desc(ExerciseSet.weight))
+            .first()
+        )
+        
+        # Query for max reps set for this exercise
+        max_reps_set = (
+            db.query(ExerciseSet)
+            .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
+            .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
+            .filter(
+                WorkoutSession.user_id == current_user.id,
+                SessionExercise.exercise_id == exercise.id,
+                ExerciseSet.is_warmup == False
+            )
+            .order_by(desc(ExerciseSet.reps))
+            .first()
+        )
+        
+        if max_weight_set or max_reps_set:
+            # Get session dates
+            max_weight_date = None
+            if max_weight_set:
+                max_weight_session = (
+                    db.query(WorkoutSession)
+                    .join(SessionExercise, WorkoutSession.id == SessionExercise.session_id)
+                    .filter(
+                        SessionExercise.id == max_weight_set.session_exercise_id
+                    )
+                    .first()
+                )
+                max_weight_date = max_weight_session.start_time if max_weight_session else None
+            
+            max_reps_date = None
+            if max_reps_set:
+                max_reps_session = (
+                    db.query(WorkoutSession)
+                    .join(SessionExercise, WorkoutSession.id == SessionExercise.session_id)
+                    .filter(
+                        SessionExercise.id == max_reps_set.session_exercise_id
+                    )
+                    .first()
+                )
+                max_reps_date = max_reps_session.start_time if max_reps_session else None
+            
+            records.append({
+                "exercise": {
+                    "id": exercise.id,
+                    "name": exercise.name,
+                    "category": exercise.category
+                },
+                "max_weight": {
+                    "weight": max_weight_set.weight if max_weight_set else 0,
+                    "reps": max_weight_set.reps if max_weight_set else 0,
+                    "date": max_weight_date.isoformat() if max_weight_date else None
+                },
+                "max_reps": {
+                    "weight": max_reps_set.weight if max_reps_set else 0,
+                    "reps": max_reps_set.reps if max_reps_set else 0,
+                    "date": max_reps_date.isoformat() if max_reps_date else None
+                }
+            })
     
-    return {
-        "personal_records": records
-    }
+    return records
 
 @router.get("/summary")
 async def get_workout_summary(

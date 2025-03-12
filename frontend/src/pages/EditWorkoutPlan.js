@@ -7,16 +7,10 @@ import {
   TextField,
   Button,
   IconButton,
-  Divider,
   List,
   ListItem,
   ListItemText,
   ListItemIcon,
-  ListItemSecondaryAction,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Grid,
   Dialog,
   DialogTitle,
@@ -37,10 +31,15 @@ import {
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { workoutPlansApi, handleApiError } from '../utils/api';
 import ExerciseSelector from '../components/workouts/ExerciseSelector';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingScreen from '../components/LoadingScreen';
+import { useUnitSystem } from '../utils/unitUtils';
 
 const EditWorkoutPlan = () => {
-  const { id } = useParams();
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
   const navigate = useNavigate();
+  const { id } = useParams();
   
   // Form state
   const [planName, setPlanName] = useState('');
@@ -68,23 +67,41 @@ const EditWorkoutPlan = () => {
         const response = await workoutPlansApi.getById(id);
         const plan = response.data;
         
+        console.log('DEBUG - Original plan data from API:', plan);
+        console.log('DEBUG - Plan exercises from API:', plan.exercises);
+        
         setOriginalPlan(plan);
         setPlanName(plan.name);
         setPlanDescription(plan.description || '');
         
         // Format exercises with the properties we need
         if (plan.exercises && plan.exercises.length > 0) {
-          setExercises(plan.exercises.map(ex => ({
-            id: ex.exercise_id || ex.id,
-            name: ex.name,
-            muscle_group: ex.muscle_group,
-            sets: ex.sets || 3,
-            reps: ex.reps || 10,
-            rest_time: ex.rest_time || 60,
-            notes: ex.notes || '',
-            order: ex.order || 0,
-            plan_exercise_id: ex.id // Keep track of the plan_exercise relationship ID
-          })));
+          const formattedExercises = plan.exercises.map(ex => {
+            const formattedEx = {
+              id: ex.exercise_id || ex.id,
+              name: ex.name,
+              muscle_group: ex.muscle_group,
+              sets: ex.sets || 3,
+              reps: ex.reps || 10,
+              rest_seconds: ex.rest_seconds || 60,
+              target_weight: weightUnit === 'lb' && ex.target_weight 
+                ? convertToPreferred(ex.target_weight, 'lb') 
+                : (ex.target_weight || 0),
+              notes: ex.notes || '',
+              order: ex.order || 0,
+              plan_exercise_id: ex.id // Keep track of the plan_exercise relationship ID
+            };
+            
+            console.log(`DEBUG - Formatted exercise "${ex.name}":`, {
+              original: ex,
+              formatted: formattedEx
+            });
+            
+            return formattedEx;
+          });
+          
+          console.log('DEBUG - All formatted exercises:', formattedExercises);
+          setExercises(formattedExercises);
         }
       } catch (error) {
         console.error('Error fetching workout plan:', error);
@@ -97,7 +114,7 @@ const EditWorkoutPlan = () => {
     if (id) {
       fetchPlanDetails();
     }
-  }, [id]);
+  }, [id, convertToPreferred, weightUnit]);
   
   // Mark form as having unsaved changes when data changes
   useEffect(() => {
@@ -111,7 +128,7 @@ const EditWorkoutPlan = () => {
           muscle_group: ex.muscle_group,
           sets: ex.sets || 3,
           reps: ex.reps || 10,
-          rest_time: ex.rest_time || 60,
+          rest_seconds: ex.rest_seconds || 60,
           notes: ex.notes || '',
           order: ex.order || 0,
           plan_exercise_id: ex.id
@@ -145,7 +162,8 @@ const EditWorkoutPlan = () => {
       ...exercise,
       sets: 3,
       reps: 10,
-      rest_time: 60,
+      rest_seconds: 60,
+      target_weight: 0,
       notes: '',
       // If the exercise already exists, don't add it again
       ...(exercises.find(e => e.id === exercise.id) || {})
@@ -168,12 +186,14 @@ const EditWorkoutPlan = () => {
   
   // Configure an exercise (sets, reps, rest)
   const handleConfigureExercise = (exercise) => {
+    console.log('DEBUG - Configuring exercise:', exercise);
     setCurrentExercise(exercise);
     setExerciseConfigOpen(true);
   };
   
   // Save exercise configuration
   const handleSaveExerciseConfig = () => {
+    console.log('DEBUG - Saving exercise config:', currentExercise);
     setExercises(prevExercises => 
       prevExercises.map(ex => 
         ex.id === currentExercise.id ? currentExercise : ex
@@ -184,6 +204,7 @@ const EditWorkoutPlan = () => {
   
   // Update current exercise configuration
   const handleExerciseConfigChange = (field, value) => {
+    console.log(`DEBUG - Changing exercise config field "${field}" to:`, value);
     setCurrentExercise(prev => ({
       ...prev,
       [field]: value
@@ -244,6 +265,7 @@ const EditWorkoutPlan = () => {
         is_active: originalPlan.is_active
       };
       
+      console.log('DEBUG - Updating plan with data:', planData);
       await workoutPlansApi.update(id, planData);
       
       // Get the original exercises to determine what's changed
@@ -251,14 +273,17 @@ const EditWorkoutPlan = () => {
       
       // Identify exercises to add (new ones)
       const exercisesToAdd = exercises.filter(ex => !ex.plan_exercise_id);
+      console.log('DEBUG - Exercises to add:', exercisesToAdd);
       
       // Identify exercises to update (existing ones with changes)
       const exercisesToUpdate = exercises.filter(ex => ex.plan_exercise_id);
+      console.log('DEBUG - Exercises to update:', exercisesToUpdate);
       
       // Identify exercises to remove (ones in original plan but not in current exercises)
       const exercisesToRemove = originalExercises.filter(
         origEx => !exercises.some(ex => ex.plan_exercise_id === origEx.id)
       );
+      console.log('DEBUG - Exercises to remove:', exercisesToRemove);
       
       // Process all changes in sequence
       
@@ -273,10 +298,17 @@ const EditWorkoutPlan = () => {
           exercise_id: exToAdd.id,
           sets: exToAdd.sets,
           reps: exToAdd.reps,
-          rest_time: exToAdd.rest_time,
-          notes: exToAdd.notes,
+          rest_seconds: exToAdd.rest_seconds,
+          target_weight: weightUnit === 'lb' 
+            ? convertFromPreferred(parseFloat(exToAdd.target_weight || 0) || 0, 'kg') 
+            : parseFloat(exToAdd.target_weight || 0) || 0,
           order: exToAdd.order
         };
+        
+        console.log('DEBUG - Adding exercise with data:', {
+          original: exToAdd,
+          formatted: exerciseData
+        });
         
         await workoutPlansApi.addExercise(id, exerciseData);
       }
@@ -286,10 +318,17 @@ const EditWorkoutPlan = () => {
         const exerciseData = {
           sets: exToUpdate.sets,
           reps: exToUpdate.reps,
-          rest_time: exToUpdate.rest_time,
-          notes: exToUpdate.notes,
+          rest_seconds: exToUpdate.rest_seconds,
+          target_weight: weightUnit === 'lb' 
+            ? convertFromPreferred(parseFloat(exToUpdate.target_weight || 0) || 0, 'kg') 
+            : parseFloat(exToUpdate.target_weight || 0) || 0,
           order: exToUpdate.order
         };
+        
+        console.log('DEBUG - Updating exercise with data:', {
+          original: exToUpdate,
+          formatted: exerciseData
+        });
         
         await workoutPlansApi.updateExercise(id, exToUpdate.plan_exercise_id, exerciseData);
       }
@@ -500,7 +539,7 @@ const EditWorkoutPlan = () => {
                               <>
                                 {exercise.muscle_group}
                                 <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_time}s rest
+                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
                                 </Typography>
                               </>
                             }
@@ -578,26 +617,26 @@ const EditWorkoutPlan = () => {
                   InputProps={{ inputProps: { min: 1 } }}
                 />
               </Grid>
+
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Target Weight (lbs/kg)"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.target_weight || 0}
+                  onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
+                  InputProps={{ inputProps: { min: 0, step: 2.5 } }}
+                />
+              </Grid>
               
-              <Grid item xs={12}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   label="Rest Time (seconds)"
                   type="number"
                   fullWidth
-                  value={currentExercise.rest_time}
-                  onChange={(e) => handleExerciseConfigChange('rest_time', Math.max(0, parseInt(e.target.value) || 0))}
+                  value={currentExercise.rest_seconds}
+                  onChange={(e) => handleExerciseConfigChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
                   InputProps={{ inputProps: { min: 0 } }}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Notes"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={currentExercise.notes || ''}
-                  onChange={(e) => handleExerciseConfigChange('notes', e.target.value)}
                 />
               </Grid>
             </Grid>

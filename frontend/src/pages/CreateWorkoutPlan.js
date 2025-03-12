@@ -24,7 +24,9 @@ import {
   DialogActions,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  InputAdornment,
+  Chip
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -37,13 +39,20 @@ import {
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { workoutPlansApi, handleApiError } from '../utils/api';
 import ExerciseSelector from '../components/workouts/ExerciseSelector';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingScreen from '../components/LoadingScreen';
+import { useUnitSystem } from '../utils/unitUtils';
 
 const CreateWorkoutPlan = () => {
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
   const navigate = useNavigate();
   
   // Form state
   const [planName, setPlanName] = useState('');
   const [planDescription, setPlanDescription] = useState('');
+  const [daysPerWeek, setDaysPerWeek] = useState(0);
+  const [durationWeeks, setDurationWeeks] = useState(0);
   const [exercises, setExercises] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -77,7 +86,8 @@ const CreateWorkoutPlan = () => {
       ...exercise,
       sets: 3,
       reps: 10,
-      rest_time: 60,
+      rest_seconds: 60,
+      target_weight: 0,
       notes: '',
       // If the exercise already exists, don't add it again
       ...(exercises.find(e => e.id === exercise.id) || {})
@@ -162,28 +172,38 @@ const CreateWorkoutPlan = () => {
       setIsLoading(true);
       setError(null);
       
-      // Create the plan first
+      // Format exercise data for API
+      const exerciseData = exercises.map((exercise, index) => ({
+        exercise_id: exercise.id,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        rest_seconds: exercise.rest_seconds,
+        target_weight: parseFloat(exercise.target_weight || 0) || 0,
+        order: index + 1,
+        day_of_week: exercise.day_of_week || null
+      }));
+      
+      // Convert weights to metric for storage if user preference is imperial
+      let daysWithConvertedWeights = [...exerciseData];
+      
+      if (weightUnit === 'lb') {
+        // Convert weights to kg for storage
+        daysWithConvertedWeights = daysWithConvertedWeights.map(exercise => ({
+          ...exercise,
+          target_weight: convertFromPreferred(parseFloat(exercise.target_weight || 0) || 0, 'kg')
+        }));
+      }
+      
       const planData = {
         name: planName,
         description: planDescription,
+        is_public: true,
+        days_per_week: daysPerWeek,
+        duration_weeks: durationWeeks,
+        exercises: daysWithConvertedWeights
       };
       
-      const response = await workoutPlansApi.create(planData);
-      const createdPlan = response.data;
-      
-      // Add exercises to the plan
-      for (const exercise of exercises) {
-        const exerciseData = {
-          exercise_id: exercise.id,
-          sets: exercise.sets,
-          reps: exercise.reps,
-          rest_time: exercise.rest_time,
-          notes: exercise.notes,
-          order: exercise.order
-        };
-        
-        await workoutPlansApi.addExercise(createdPlan.id, exerciseData);
-      }
+      await workoutPlansApi.create(planData);
       
       setSnackbar({
         open: true,
@@ -191,18 +211,13 @@ const CreateWorkoutPlan = () => {
         severity: 'success'
       });
       
-      // Navigate to the plan details after short delay
+      // Navigate back to plans list after short delay
       setTimeout(() => {
-        navigate(`/workout-plans/${createdPlan.id}`);
+        navigate('/workout-plans');
       }, 1500);
     } catch (error) {
       console.error('Error creating workout plan:', error);
       setError(handleApiError(error, null, 'Failed to create workout plan'));
-      setSnackbar({
-        open: true,
-        message: 'Failed to create workout plan',
-        severity: 'error'
-      });
     } finally {
       setIsLoading(false);
     }
@@ -220,6 +235,98 @@ const CreateWorkoutPlan = () => {
   const handleBack = () => {
     navigate('/workout-plans');
   };
+  
+  // Exercise configuration dialog
+  const exerciseConfigDialog = (
+    <Dialog open={exerciseConfigOpen} onClose={() => setExerciseConfigOpen(false)}>
+      <DialogTitle>Configure Exercise</DialogTitle>
+      <DialogContent>
+        {currentExercise && (
+          <Box sx={{ pt: 1 }}>
+            <Typography variant="h6" gutterBottom>
+              {currentExercise.name}
+            </Typography>
+            
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Sets"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.sets}
+                  onChange={(e) => handleExerciseConfigChange('sets', Math.max(1, parseInt(e.target.value) || 1))}
+                  InputProps={{ inputProps: { min: 1 } }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Reps"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.reps}
+                  onChange={(e) => handleExerciseConfigChange('reps', Math.max(1, parseInt(e.target.value) || 1))}
+                  InputProps={{ inputProps: { min: 1 } }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Rest Between Sets (seconds)"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.rest_seconds}
+                  onChange={(e) => handleExerciseConfigChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
+                  InputProps={{ inputProps: { min: 0 } }}
+                />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Target Weight"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.target_weight}
+                  onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
+                  InputProps={{ 
+                    inputProps: { min: 0, step: 0.5 },
+                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
+                  }}
+                />
+              </Grid>
+              
+              <Grid item xs={12}>
+                <FormControl fullWidth>
+                  <InputLabel id="day-of-week-label">Workout Day</InputLabel>
+                  <Select
+                    labelId="day-of-week-label"
+                    value={currentExercise.day_of_week || ''}
+                    onChange={(e) => handleExerciseConfigChange('day_of_week', e.target.value)}
+                    label="Workout Day"
+                  >
+                    <MenuItem value="">Not specified</MenuItem>
+                    <MenuItem value={1}>Day 1</MenuItem>
+                    <MenuItem value={2}>Day 2</MenuItem>
+                    <MenuItem value={3}>Day 3</MenuItem>
+                    <MenuItem value={4}>Day 4</MenuItem>
+                    <MenuItem value={5}>Day 5</MenuItem>
+                    <MenuItem value={6}>Day 6</MenuItem>
+                    <MenuItem value={7}>Day 7</MenuItem>
+                  </Select>
+                </FormControl>
+              </Grid>
+            </Grid>
+          </Box>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={() => setExerciseConfigOpen(false)}>Cancel</Button>
+        <Button onClick={handleSaveExerciseConfig} variant="contained" color="primary">
+          Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
   
   return (
     <Box sx={{ p: 3 }}>
@@ -281,6 +388,30 @@ const CreateWorkoutPlan = () => {
               disabled={isLoading}
             />
           </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Days Per Week"
+              type="number"
+              fullWidth
+              value={daysPerWeek}
+              onChange={(e) => setDaysPerWeek(Math.max(0, parseInt(e.target.value) || 0))}
+              InputProps={{ inputProps: { min: 0, max: 7 } }}
+              helperText="How many days per week this plan requires (0 for flexible)"
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6}>
+            <TextField
+              label="Duration (Weeks)"
+              type="number"
+              fullWidth
+              value={durationWeeks}
+              onChange={(e) => setDurationWeeks(Math.max(0, parseInt(e.target.value) || 0))}
+              InputProps={{ inputProps: { min: 0 } }}
+              helperText="Recommended program length in weeks (0 for ongoing)"
+            />
+          </Grid>
         </Grid>
       </Paper>
       
@@ -288,12 +419,12 @@ const CreateWorkoutPlan = () => {
       <Paper sx={{ mb: 3, p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h2">
-            Exercises
+            Exercises ({exercises.length})
           </Typography>
           
           <Button
-            variant="outlined"
             startIcon={<AddIcon />}
+            variant="outlined"
             onClick={handleAddExercises}
             disabled={isLoading}
           >
@@ -307,21 +438,121 @@ const CreateWorkoutPlan = () => {
           </Alert>
         )}
         
+        {/* Weekly Structure View */}
+        {exercises.length > 0 && daysPerWeek > 0 && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="subtitle1" gutterBottom>
+              Weekly Structure
+            </Typography>
+            
+            <Grid container spacing={2}>
+              {Array.from({ length: daysPerWeek }, (_, i) => i + 1).map((day) => {
+                const dayExercises = exercises.filter(ex => ex.day_of_week === day);
+                return (
+                  <Grid item xs={12} sm={6} md={4} key={`day-${day}`}>
+                    <Paper 
+                      variant="outlined" 
+                      sx={{ 
+                        p: 2, 
+                        height: '100%',
+                        backgroundColor: theme => theme.palette.grey[50]
+                      }}
+                    >
+                      <Typography variant="h6" gutterBottom>
+                        Day {day}
+                      </Typography>
+                      
+                      {dayExercises.length === 0 ? (
+                        <Typography variant="body2" color="text.secondary">
+                          No exercises assigned to this day
+                        </Typography>
+                      ) : (
+                        <List dense disablePadding>
+                          {dayExercises.map((exercise) => (
+                            <ListItem key={exercise.id} disablePadding sx={{ py: 0.5 }}>
+                              <ListItemIcon sx={{ minWidth: 36 }}>
+                                <FitnessCenterIcon fontSize="small" />
+                              </ListItemIcon>
+                              <ListItemText 
+                                primary={exercise.name}
+                                secondary={`${exercise.sets}×${exercise.reps}`}
+                                primaryTypographyProps={{ variant: 'body2' }}
+                                secondaryTypographyProps={{ variant: 'caption' }}
+                              />
+                            </ListItem>
+                          ))}
+                        </List>
+                      )}
+                    </Paper>
+                  </Grid>
+                );
+              })}
+              
+              {/* Unassigned exercises */}
+              {exercises.some(ex => !ex.day_of_week) && (
+                <Grid item xs={12} sm={6} md={4}>
+                  <Paper 
+                    variant="outlined" 
+                    sx={{ 
+                      p: 2, 
+                      height: '100%',
+                      backgroundColor: theme => theme.palette.grey[100]
+                    }}
+                  >
+                    <Typography variant="h6" gutterBottom color="text.secondary">
+                      Unassigned
+                    </Typography>
+                    
+                    <List dense disablePadding>
+                      {exercises.filter(ex => !ex.day_of_week).map((exercise) => (
+                        <ListItem key={exercise.id} disablePadding sx={{ py: 0.5 }}>
+                          <ListItemIcon sx={{ minWidth: 36 }}>
+                            <FitnessCenterIcon fontSize="small" />
+                          </ListItemIcon>
+                          <ListItemText 
+                            primary={exercise.name}
+                            secondary={`${exercise.sets}×${exercise.reps}`}
+                            primaryTypographyProps={{ variant: 'body2' }}
+                            secondaryTypographyProps={{ variant: 'caption' }}
+                          />
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Paper>
+                </Grid>
+              )}
+            </Grid>
+          </Box>
+        )}
+        
+        {/* Exercise list with drag and drop */}
         {exercises.length === 0 ? (
-          <Alert severity="info">
-            No exercises added yet. Click "Add Exercises" to select exercises for this plan.
-          </Alert>
+          <Box sx={{ textAlign: 'center', py: 4 }}>
+            <Typography color="text.secondary" paragraph>
+              No exercises added yet.
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<AddIcon />}
+              onClick={handleAddExercises}
+            >
+              Add Exercises
+            </Button>
+          </Box>
         ) : (
           <DragDropContext onDragEnd={handleDragEnd}>
             <Droppable droppableId="exercises">
               {(provided) => (
                 <List 
-                  {...provided.droppableProps}
                   ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  component="div"
                   sx={{ 
+                    bgcolor: 'background.paper',
                     border: '1px solid',
                     borderColor: 'divider',
-                    borderRadius: 1
+                    borderRadius: 1,
+                    mb: 3
                   }}
                 >
                   {exercises.map((exercise, index) => (
@@ -330,33 +561,45 @@ const CreateWorkoutPlan = () => {
                         <ListItem
                           ref={provided.innerRef}
                           {...provided.draggableProps}
-                          divider={index < exercises.length - 1}
+                          divider
                           secondaryAction={
-                            <IconButton 
-                              edge="end" 
-                              aria-label="delete"
-                              onClick={() => handleRemoveExercise(exercise.id)}
-                              disabled={isLoading}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
+                            <>
+                              <IconButton 
+                                edge="end" 
+                                aria-label="delete"
+                                onClick={() => handleRemoveExercise(exercise.id)}
+                                disabled={isLoading}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </>
                           }
                         >
                           <ListItemIcon {...provided.dragHandleProps}>
                             <DragIcon />
                           </ListItemIcon>
                           
-                          <ListItemIcon>
-                            <FitnessCenterIcon />
-                          </ListItemIcon>
-                          
                           <ListItemText
-                            primary={exercise.name}
+                            primary={
+                              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                {exercise.name}
+                                {exercise.day_of_week && (
+                                  <Chip 
+                                    label={`Day ${exercise.day_of_week}`} 
+                                    size="small" 
+                                    sx={{ ml: 1 }}
+                                    color="primary"
+                                    variant="outlined"
+                                  />
+                                )}
+                              </Box>
+                            }
                             secondary={
                               <>
                                 {exercise.muscle_group}
                                 <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_time}s rest
+                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                  {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
                                 </Typography>
                               </>
                             }
@@ -391,88 +634,7 @@ const CreateWorkoutPlan = () => {
       />
       
       {/* Exercise configuration dialog */}
-      <Dialog
-        open={exerciseConfigOpen}
-        onClose={() => setExerciseConfigOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>
-          Configure Exercise
-        </DialogTitle>
-        
-        <DialogContent dividers>
-          {currentExercise && (
-            <Grid container spacing={3}>
-              <Grid item xs={12}>
-                <Typography variant="h6">
-                  {currentExercise.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary" gutterBottom>
-                  {currentExercise.muscle_group}
-                </Typography>
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Sets"
-                  type="number"
-                  fullWidth
-                  value={currentExercise.sets}
-                  onChange={(e) => handleExerciseConfigChange('sets', Math.max(1, parseInt(e.target.value) || 1))}
-                  InputProps={{ inputProps: { min: 1 } }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Reps"
-                  type="number"
-                  fullWidth
-                  value={currentExercise.reps}
-                  onChange={(e) => handleExerciseConfigChange('reps', Math.max(1, parseInt(e.target.value) || 1))}
-                  InputProps={{ inputProps: { min: 1 } }}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Rest Time (seconds)"
-                  type="number"
-                  fullWidth
-                  value={currentExercise.rest_time}
-                  onChange={(e) => handleExerciseConfigChange('rest_time', Math.max(0, parseInt(e.target.value) || 0))}
-                  InputProps={{ inputProps: { min: 0 } }}
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <TextField
-                  label="Notes"
-                  fullWidth
-                  multiline
-                  rows={2}
-                  value={currentExercise.notes || ''}
-                  onChange={(e) => handleExerciseConfigChange('notes', e.target.value)}
-                />
-              </Grid>
-            </Grid>
-          )}
-        </DialogContent>
-        
-        <DialogActions>
-          <Button onClick={() => setExerciseConfigOpen(false)}>
-            Cancel
-          </Button>
-          <Button 
-            onClick={handleSaveExerciseConfig} 
-            variant="contained"
-            color="primary"
-          >
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {exerciseConfigDialog}
       
       {/* Loading overlay */}
       {isLoading && (

@@ -14,7 +14,6 @@ import {
   TableRow, 
   Paper, 
   CircularProgress,
-  Grid,
   Chip,
   IconButton,
   Dialog,
@@ -34,9 +33,13 @@ import {
   Visibility as VisibilityIcon
 } from '@mui/icons-material';
 import { sessionsApi } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import { useUnitSystem } from '../utils/unitUtils';
 
 const WorkoutSessions = () => {
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred } = useUnitSystem();
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
@@ -62,7 +65,17 @@ const WorkoutSessions = () => {
       }
       
       const response = await sessionsApi.getAll(params);
-      setSessions(response.data);
+      let sessions = response.data;
+      
+      // Convert weights if needed
+      if (weightUnit === 'lb') {
+        sessions = sessions.map(session => ({
+          ...session,
+          total_weight: convertToPreferred(session.total_weight, 'kg')
+        }));
+      }
+      
+      setSessions(sessions);
     } catch (error) {
       console.error('Error fetching workout sessions:', error);
     } finally {

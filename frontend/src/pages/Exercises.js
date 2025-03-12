@@ -37,8 +37,13 @@ import {
   FitnessCenter as FitnessCenterIcon
 } from '@mui/icons-material';
 import { exercisesApi } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import LoadingScreen from '../components/LoadingScreen';
+import { useUnitSystem } from '../utils/unitUtils';
 
 const Exercises = () => {
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
   const [exercises, setExercises] = useState([]);
   const [filteredExercises, setFilteredExercises] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,6 +75,32 @@ const Exercises = () => {
     fetchExercises();
   }, []);
 
+  // Fetch all exercises
+  const fetchExercises = async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await exercisesApi.getAll();
+      
+      // Convert default weights if needed
+      let exerciseData = response.data;
+      if (weightUnit === 'lb') {
+        exerciseData = exerciseData.map(ex => ({
+          ...ex,
+          default_weight: convertToPreferred(ex.default_weight, 'kg')
+        }));
+      }
+      
+      setExercises(exerciseData);
+      setFilteredExercises(exerciseData);
+    } catch (error) {
+      console.error('Error fetching exercises:', error);
+      setError('Failed to load exercises. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Filter exercises when search term changes
   useEffect(() => {
     if (searchTerm.trim() === '') {
@@ -83,22 +114,6 @@ const Exercises = () => {
       setFilteredExercises(filtered);
     }
   }, [searchTerm, exercises]);
-
-  // Fetch all exercises
-  const fetchExercises = async () => {
-    try {
-      setIsLoading(true);
-      setError(null);
-      const response = await exercisesApi.getAll();
-      setExercises(response.data);
-      setFilteredExercises(response.data);
-    } catch (error) {
-      console.error('Error fetching exercises:', error);
-      setError('Failed to load exercises. Please try again later.');
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   // Handle search input change
   const handleSearchChange = (event) => {
@@ -122,10 +137,13 @@ const Exercises = () => {
 
   // Open dialog to edit exercise
   const handleEditExercise = (exercise) => {
+    // Convert weight if needed
+    let exerciseToEdit = { ...exercise };
+    
     setExerciseDialog({
       open: true,
       isEditing: true,
-      data: { ...exercise }
+      data: exerciseToEdit
     });
   };
 
@@ -158,7 +176,17 @@ const Exercises = () => {
       let response;
       
       if (isEditing) {
-        response = await exercisesApi.update(data.id, data);
+        // Convert weight back to kg for storage if using imperial
+        let exerciseToSave = { ...data };
+        
+        if (weightUnit === 'lb') {
+          exerciseToSave = {
+            ...exerciseToSave,
+            default_weight: convertFromPreferred(data.default_weight, 'kg')
+          };
+        }
+        
+        response = await exercisesApi.update(data.id, exerciseToSave);
         
         // Update the local state with the updated exercise
         setExercises(exercises.map(ex => 
@@ -171,7 +199,17 @@ const Exercises = () => {
           severity: 'success'
         });
       } else {
-        response = await exercisesApi.create(data);
+        // Convert weight back to kg for storage if using imperial
+        let exerciseToSave = { ...data };
+        
+        if (weightUnit === 'lb') {
+          exerciseToSave = {
+            ...exerciseToSave,
+            default_weight: convertFromPreferred(data.default_weight, 'kg')
+          };
+        }
+        
+        response = await exercisesApi.create(exerciseToSave);
         
         // Add the new exercise to the local state
         setExercises([...exercises, response.data]);
@@ -496,6 +534,18 @@ const Exercises = () => {
               <MenuItem value="Plyometric">Plyometric</MenuItem>
             </Select>
           </FormControl>
+          
+          <TextField
+            label="Default Weight"
+            type="number"
+            fullWidth
+            value={exerciseDialog.data.default_weight || ''}
+            onChange={(e) => handleDialogChange({ target: { name: 'default_weight', value: e.target.value } })}
+            margin="normal"
+            InputProps={{ 
+              endAdornment: <Typography color="textSecondary">{weightUnit}</Typography>
+            }}
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>

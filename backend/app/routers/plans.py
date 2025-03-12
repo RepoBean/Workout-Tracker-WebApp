@@ -115,6 +115,29 @@ async def get_workout_plans(
     
     return plans
 
+@router.get("/next", response_model=WorkoutPlanResponse)
+async def get_next_workout_plan(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get the currently active workout plan for the user.
+    Returns the first plan with is_active=True for the user.
+    """
+    # Check for active plans where the user is the owner
+    active_plan = db.query(WorkoutPlan).filter(
+        WorkoutPlan.owner_id == current_user.id,
+        WorkoutPlan.is_active == True
+    ).first()
+    
+    if not active_plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No active workout plan found"
+        )
+    
+    return active_plan
+
 @router.get("/{plan_id}", response_model=WorkoutPlanResponse)
 async def get_workout_plan(
     plan_id: int,
@@ -152,6 +175,7 @@ async def update_workout_plan(
     """
     Update a workout plan.
     Users can only update their own plans.
+    If is_active is set to True, all other plans will be set to inactive.
     """
     db_plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id).first()
     
@@ -168,6 +192,14 @@ async def update_workout_plan(
             detail="Not authorized to update this workout plan"
         )
     
+    # If activating this plan, deactivate all others
+    if plan_update.is_active is True and not db_plan.is_active:
+        # Set all other plans to inactive
+        db.query(WorkoutPlan).filter(
+            WorkoutPlan.owner_id == current_user.id,
+            WorkoutPlan.id != plan_id
+        ).update({"is_active": False})
+    
     # Update plan fields
     if plan_update.name is not None:
         db_plan.name = plan_update.name
@@ -175,6 +207,8 @@ async def update_workout_plan(
         db_plan.description = plan_update.description
     if plan_update.is_public is not None:
         db_plan.is_public = plan_update.is_public
+    if plan_update.is_active is not None:
+        db_plan.is_active = plan_update.is_active
     if plan_update.days_per_week is not None:
         db_plan.days_per_week = plan_update.days_per_week
     if plan_update.duration_weeks is not None:
@@ -513,4 +547,43 @@ async def clone_workout_plan(
     db.commit()
     db.refresh(new_plan)
     
-    return new_plan 
+    return new_plan
+
+@router.post("/{plan_id}/activate", response_model=WorkoutPlanResponse)
+async def activate_workout_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Activate a workout plan.
+    Only one plan can be active at a time per user.
+    """
+    # Get the plan to activate
+    db_plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id).first()
+    
+    if not db_plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workout plan not found"
+        )
+    
+    # Check if user owns this plan
+    if db_plan.owner_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to activate this workout plan"
+        )
+    
+    # Deactivate all other plans for this user
+    db.query(WorkoutPlan).filter(
+        WorkoutPlan.owner_id == current_user.id,
+        WorkoutPlan.id != plan_id
+    ).update({"is_active": False})
+    
+    # Activate this plan
+    db_plan.is_active = True
+    db.commit()
+    db.refresh(db_plan)
+    
+    return db_plan 

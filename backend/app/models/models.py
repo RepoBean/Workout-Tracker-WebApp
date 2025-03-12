@@ -57,6 +57,7 @@ class WorkoutPlan(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     is_public = Column(Boolean, default=False, nullable=False)
+    is_active = Column(Boolean, default=False, nullable=False)
     days_per_week = Column(Integer, nullable=True)
     duration_weeks = Column(Integer, nullable=True)
     

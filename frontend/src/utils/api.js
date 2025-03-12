@@ -43,14 +43,31 @@ api.interceptors.response.use(
 // Workout plans API
 export const workoutPlansApi = {
   getAll: () => api.get('/api/plans'),
-  getById: (id) => api.get(`/api/plans/${id}`),
-  create: (planData) => api.post('/api/plans', planData),
-  update: (id, planData) => api.put(`/api/plans/${id}`, planData),
+  getById: (id) => {
+    console.log(`DEBUG - API: Fetching workout plan with ID ${id}`);
+    return api.get(`/api/plans/${id}`).then(response => {
+      console.log(`DEBUG - API: Received plan data:`, response.data);
+      return response;
+    });
+  },
+  create: (planData) => {
+    console.log(`DEBUG - API: Creating workout plan with data:`, planData);
+    return api.post('/api/plans', planData);
+  },
+  update: (id, planData) => {
+    console.log(`DEBUG - API: Updating workout plan ${id} with data:`, planData);
+    return api.put(`/api/plans/${id}`, planData);
+  },
   delete: (id) => api.delete(`/api/plans/${id}`),
   getExercises: (id) => api.get(`/api/plans/${id}/exercises`),
-  addExercise: (id, exerciseData) => api.post(`/api/plans/${id}/exercises`, exerciseData),
-  updateExercise: (planId, exerciseId, exerciseData) => 
-    api.put(`/api/plans/${planId}/exercises/${exerciseId}`, exerciseData),
+  addExercise: (id, exerciseData) => {
+    console.log(`DEBUG - API: Adding exercise to plan ${id} with data:`, exerciseData);
+    return api.post(`/api/plans/${id}/exercises`, exerciseData);
+  },
+  updateExercise: (planId, exerciseId, exerciseData) => {
+    console.log(`DEBUG - API: Updating exercise ${exerciseId} in plan ${planId} with data:`, exerciseData);
+    return api.put(`/api/plans/${planId}/exercises/${exerciseId}`, exerciseData);
+  },
   deleteExercise: (planId, exerciseId) => 
     api.delete(`/api/plans/${planId}/exercises/${exerciseId}`),
   export: (id) => api.get(`/api/plans/${id}/export`, { responseType: 'blob' }),
@@ -60,6 +77,7 @@ export const workoutPlansApi = {
     },
   }),
   getNextWorkout: () => api.get('/api/plans/next'),
+  activate: (id) => api.post(`/api/plans/${id}/activate`),
 };
 
 // Workout sessions API
@@ -104,7 +122,7 @@ export const progressApi = {
 export const userApi = {
   getCurrentUser: () => api.get('/api/users/me'),
   updateProfile: (userData) => api.patch('/api/users/me', userData),
-  updateSettings: (settingsData) => api.put('/api/users/me/settings', settingsData),
+  updateSettings: (settingsData) => api.patch('/api/users/me', { settings: settingsData }),
 };
 
 /**

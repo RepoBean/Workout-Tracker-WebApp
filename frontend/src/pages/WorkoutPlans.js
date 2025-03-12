@@ -40,7 +40,7 @@ import {
   FileUpload as UploadIcon,
   Check as CheckIcon
 } from '@mui/icons-material';
-import { workoutPlansApi } from '../utils/api';
+import { workoutPlansApi, handleApiError } from '../utils/api';
 
 const WorkoutPlans = () => {
   const navigate = useNavigate();
@@ -164,7 +164,7 @@ const WorkoutPlans = () => {
     if (!selectedPlan) return;
     
     try {
-      await workoutPlansApi.update(selectedPlan.id, { is_active: true });
+      await workoutPlansApi.activate(selectedPlan.id);
       
       // Update plans to reflect the change
       setPlans(plans.map(plan => ({
@@ -181,7 +181,7 @@ const WorkoutPlans = () => {
       console.error('Error setting active plan:', error);
       setSnackbar({
         open: true,
-        message: 'Failed to set plan as active',
+        message: handleApiError(error, null, 'Failed to set plan as active'),
         severity: 'error'
       });
     }

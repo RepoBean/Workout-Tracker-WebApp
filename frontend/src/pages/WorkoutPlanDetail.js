@@ -75,7 +75,7 @@ const WorkoutPlanDetail = () => {
   // Handle setting this plan as active
   const handleSetActive = async () => {
     try {
-      await workoutPlansApi.update(id, { is_active: true });
+      await workoutPlansApi.activate(id);
       
       // Update local state
       setPlan(prev => ({
@@ -318,7 +318,7 @@ const WorkoutPlanDetail = () => {
                       {exercise.reps || (exercise.duration ? `${exercise.duration}s` : 'N/A')}
                     </TableCell>
                     <TableCell>
-                      {exercise.rest_time ? `${exercise.rest_time}s` : '60s'}
+                      {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
                     </TableCell>
                     <TableCell>
                       <Typography variant="body2" sx={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>

@@ -1,47 +1,68 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   Box, 
   Typography, 
   Button, 
+  Grid, 
+  Paper, 
   Card, 
   CardContent,
-  Stepper, 
-  Step, 
-  StepLabel, 
-  CircularProgress,
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
+  CardActions,
+  Divider,
+  TextField,
+  IconButton,
+  LinearProgress,
+  Chip,
+  FormControl,
+  InputLabel, 
+  Select,
+  MenuItem,
+  Dialog,
+  DialogTitle,
+  DialogContent,
   DialogContentText,
   DialogActions,
-  TextField,
-  Grid,
-  IconButton,
-  Paper,
-  Divider,
+  Stepper, 
+  Step, 
+  StepLabel,
+  StepContent,
+  Accordion, 
+  AccordionSummary, 
+  AccordionDetails,
   Alert,
   Snackbar,
-  LinearProgress,
-  Chip
+  Container,
+  CircularProgress
 } from '@mui/material';
 import { 
+  FitnessCenter as FitnessCenterIcon,
+  Timer as TimerIcon,
+  Add as AddIcon,
+  Check as CheckIcon,
+  ArrowBack as ArrowBackIcon,
   ArrowForward as NextIcon,
   ArrowBack as PrevIcon,
-  Check as CheckIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
+  PlayArrow as PlayIcon, 
+  Pause as PauseIcon,
+  Done as DoneIcon,
   Close as CloseIcon,
-  Timer as TimerIcon,
-  FitnessCenter as FitnessCenterIcon,
-  Home as HomeIcon
+  Home as HomeIcon,
+  Edit as EditIcon,
+  Save as SaveIcon
 } from '@mui/icons-material';
 import { sessionsApi, workoutPlansApi } from '../utils/api';
+import { useAuth } from '../contexts/AuthContext';
+import { useUnitSystem } from '../utils/unitUtils';
+import LoadingScreen from '../components/LoadingScreen';
+import { formatDistanceToNow, format } from 'date-fns';
 
 const ActiveWorkout = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
+  const { currentUser } = useAuth();
+  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
   
   // Extract plan_id from query params if available (for new sessions)
   const queryParams = new URLSearchParams(location.search);
@@ -60,6 +81,7 @@ const ActiveWorkout = () => {
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [workoutTimer, setWorkoutTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState(null);
+  const [noExercisesForToday, setNoExercisesForToday] = useState(false);
 
   // Load session data or create new session
   useEffect(() => {
@@ -276,6 +298,75 @@ const ActiveWorkout = () => {
     return totalSets > 0 ? (completedSetsCount / totalSets) * 100 : 0;
   };
 
+  // Update the fetchActiveWorkoutPlan function to handle days without exercises
+  const fetchActiveWorkoutPlan = async () => {
+    try {
+      const response = await workoutPlansApi.getActive();
+      const plan = response.data;
+      
+      if (!plan) {
+        throw new Error('No active workout plan found');
+      }
+      
+      setSession(plan);
+      
+      // Get day of week and set up today's exercises
+      const daysOfWeek = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+      const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const todayName = daysOfWeek[today];
+      
+      // Get exercises for today
+      let exercisesForToday = [];
+      
+      if (plan.days && plan.days[todayName] && plan.days[todayName].exercises && plan.days[todayName].exercises.length > 0) {
+        exercisesForToday = plan.days[todayName].exercises.map(ex => ({
+          exercise_id: ex.exercise_id,
+          name: ex.name,
+          target_reps: ex.reps || 10,
+          target_weight: ex.weight || 0,
+          target_sets: ex.sets || 3,
+          completed_sets: 0,
+          sets: []
+        }));
+      }
+      
+      // If no exercises for today, show a message and offer alternatives
+      if (exercisesForToday.length === 0) {
+        setIsLoading(false);
+        setNoExercisesForToday(true);
+        // Show the no exercises message
+        setSnackbar({
+          open: true,
+          message: 'No exercises scheduled for today in your active plan.',
+          severity: 'info'
+        });
+        
+        // We'll handle this in the UI - see the updated render section below
+        return;
+      }
+      
+      // Create a workout session with the exercises
+      try {
+        const sessionResponse = await sessionsApi.create({
+          workout_plan_id: plan.id,
+          exercises: exercisesForToday
+        });
+        
+        setSession(sessionResponse.data);
+        setCurrentExerciseIndex(0);
+        setIsLoading(false);
+      } catch (sessionError) {
+        console.error('Error creating session:', sessionError);
+        setError('Failed to create workout session');
+        setIsLoading(false);
+      }
+    } catch (error) {
+      console.error('Error fetching active plan:', error);
+      setError('Failed to load active workout plan');
+      setIsLoading(false);
+    }
+  };
+
   // Render loading state
   if (isLoading) {
     return (
@@ -336,6 +427,39 @@ const ActiveWorkout = () => {
   // Get current exercise
   const currentExercise = session.exercises[currentExerciseIndex];
   const exerciseSetsCount = currentExercise.sets_count || 1;
+
+  // Add a new section to the return statement to handle no exercises for today
+  if (noExercisesForToday) {
+    return (
+      <Container maxWidth="md">
+        <Paper sx={{ p: 3, mt: 3 }}>
+          <Typography variant="h5" gutterBottom align="center">
+            No Exercises Scheduled For Today
+          </Typography>
+          <Typography paragraph align="center">
+            Your active workout plan doesn't have any exercises scheduled for today.
+          </Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, mt: 4 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<ArrowBackIcon />}
+              onClick={() => navigate('/workout-plans')}
+            >
+              Back to Workout Plans
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={() => navigate('/workout-plans/create')}
+            >
+              Create New Workout
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
+    );
+  }
 
   return (
     <Box>
@@ -448,13 +572,13 @@ const ActiveWorkout = () => {
                       <Grid container spacing={2} sx={{ ml: { xs: 0, sm: 2 }, flex: 1 }}>
                         <Grid item xs={12} sm={5}>
                           <TextField
-                            label="Weight (kg)"
+                            label="Weight"
                             type="number"
-                            fullWidth
-                            size="small"
-                            value={editValues.weight}
+                            value={editValues.weight || ''}
                             onChange={(e) => setEditValues({ ...editValues, weight: e.target.value })}
-                            InputProps={{ inputProps: { min: 0 } }}
+                            InputProps={{ endAdornment: <Typography color="textSecondary">{weightUnit}</Typography> }}
+                            size="small"
+                            sx={{ width: '100%' }}
                           />
                         </Grid>
                         <Grid item xs={12} sm={5}>
@@ -482,11 +606,11 @@ const ActiveWorkout = () => {
                         <Box sx={{ flex: 1, ml: { xs: 0, sm: 2 } }}>
                           {isCompleted ? (
                             <Typography>
-                              <strong>{setWeight} kg</strong> × <strong>{setReps} reps</strong>
+                              <strong>{setWeight} {weightUnit}</strong> × <strong>{setReps} reps</strong>
                             </Typography>
                           ) : (
                             <Typography color="text.secondary">
-                              {currentExercise.target_weight ? `Target: ${currentExercise.target_weight} kg × ${currentExercise.target_reps} reps` : 'Ready to record'}
+                              {currentExercise.target_weight ? `Target: ${currentExercise.target_weight} {weightUnit} × ${currentExercise.target_reps} reps` : 'Ready to record'}
                             </Typography>
                           )}
                         </Box>
