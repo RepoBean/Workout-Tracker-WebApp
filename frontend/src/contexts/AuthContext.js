@@ -17,7 +17,8 @@ export const AuthProvider = ({ children }) => {
   const [error, setError] = useState(null);
 
   // Set up axios defaults
-  axios.defaults.baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+  axios.defaults.baseURL = process.env.REACT_APP_API_URL || 
+    `http://${window.location.hostname}:8000`;
   
   // Add token to requests if available
   useEffect(() => {

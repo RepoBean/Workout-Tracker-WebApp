@@ -304,3 +304,202 @@ def test_validation_rejects_invalid_exercise_data(client, user_headers, db, test
     
     # FastAPI should validate this with a 422 error
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY 
+
+def test_update_exercise_in_plan(client, user_headers, db, test_user, test_exercise):
+    """Test updating an exercise in a workout plan"""
+    # Create a workout plan
+    plan = WorkoutPlan(
+        name="Plan for Exercise Update",
+        description="Plan to test exercise updates",
+        is_public=True,
+        owner_id=test_user["id"]
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    
+    # Add an exercise to the plan
+    plan_exercise = PlanExercise(
+        workout_plan_id=plan.id,
+        exercise_id=test_exercise.id,
+        sets=3,
+        reps=10,
+        rest_seconds=60,
+        target_weight=50.0,
+        order=1
+    )
+    db.add(plan_exercise)
+    db.commit()
+    
+    # Update the exercise configuration
+    update_data = {
+        "sets": 4,
+        "reps": 12,
+        "rest_seconds": 90,
+        "target_weight": 60.0
+    }
+    
+    response = client.put(
+        f"/api/plans/{plan.id}/exercises/{test_exercise.id}",
+        json=update_data,
+        headers=user_headers
+    )
+    
+    assert response.status_code == status.HTTP_200_OK
+    data = response.json()
+    
+    # Verify updated values
+    assert data["sets"] == update_data["sets"]
+    assert data["reps"] == update_data["reps"]
+    assert data["rest_seconds"] == update_data["rest_seconds"]
+    assert data["target_weight"] == update_data["target_weight"]
+    
+    # Verify in database
+    db_plan_exercise = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan.id,
+        PlanExercise.exercise_id == test_exercise.id
+    ).first()
+    
+    assert db_plan_exercise.sets == update_data["sets"]
+    assert db_plan_exercise.reps == update_data["reps"]
+    assert db_plan_exercise.rest_seconds == update_data["rest_seconds"]
+    assert db_plan_exercise.target_weight == update_data["target_weight"]
+
+def test_remove_exercise_from_plan(client, user_headers, db, test_user, test_exercise):
+    """Test removing an exercise from a workout plan"""
+    # Create a workout plan
+    plan = WorkoutPlan(
+        name="Plan for Exercise Removal",
+        description="Plan to test exercise removal",
+        is_public=True,
+        owner_id=test_user["id"]
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    
+    # Add an exercise to the plan
+    plan_exercise = PlanExercise(
+        workout_plan_id=plan.id,
+        exercise_id=test_exercise.id,
+        sets=3,
+        reps=10,
+        rest_seconds=60,
+        target_weight=50.0,
+        order=1
+    )
+    db.add(plan_exercise)
+    db.commit()
+    
+    # Remove the exercise
+    response = client.delete(
+        f"/api/plans/{plan.id}/exercises/{test_exercise.id}",
+        headers=user_headers
+    )
+    
+    assert response.status_code == status.HTTP_204_NO_CONTENT
+    
+    # Verify exercise was removed from database
+    db_plan_exercise = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan.id,
+        PlanExercise.exercise_id == test_exercise.id
+    ).first()
+    
+    assert db_plan_exercise is None
+    
+    # Verify plan still exists
+    db_plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan.id).first()
+    assert db_plan is not None
+
+def test_reorder_exercises_in_plan(client, user_headers, db, test_user):
+    """Test reordering exercises in a workout plan"""
+    # Create a workout plan
+    plan = WorkoutPlan(
+        name="Plan for Exercise Reordering",
+        description="Plan to test exercise reordering",
+        is_public=True,
+        owner_id=test_user["id"]
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    
+    # Create two exercises
+    exercise1 = Exercise(
+        name="First Exercise",
+        description="Exercise to test reordering (1)",
+        category="strength",
+        muscle_group="chest",
+        created_by=test_user["id"]
+    )
+    db.add(exercise1)
+    
+    exercise2 = Exercise(
+        name="Second Exercise",
+        description="Exercise to test reordering (2)",
+        category="strength",
+        muscle_group="back",
+        created_by=test_user["id"]
+    )
+    db.add(exercise2)
+    db.commit()
+    db.refresh(exercise1)
+    db.refresh(exercise2)
+    
+    # Add exercises to the plan with initial order
+    plan_exercise1 = PlanExercise(
+        workout_plan_id=plan.id,
+        exercise_id=exercise1.id,
+        sets=3,
+        reps=10,
+        rest_seconds=60,
+        target_weight=50.0,
+        order=1
+    )
+    db.add(plan_exercise1)
+    
+    plan_exercise2 = PlanExercise(
+        workout_plan_id=plan.id,
+        exercise_id=exercise2.id,
+        sets=3,
+        reps=10,
+        rest_seconds=60,
+        target_weight=50.0,
+        order=2
+    )
+    db.add(plan_exercise2)
+    db.commit()
+    
+    # Reorder exercises (swap the order)
+    reorder_data = [
+        {"exercise_id": exercise1.id, "new_order": 2},
+        {"exercise_id": exercise2.id, "new_order": 1}
+    ]
+    
+    response = client.post(
+        f"/api/plans/{plan.id}/exercises/reorder",
+        json=reorder_data,
+        headers=user_headers
+    )
+    
+    assert response.status_code == status.HTTP_200_OK
+    
+    # Verify the order was updated in the database
+    db_plan_exercise1 = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan.id,
+        PlanExercise.exercise_id == exercise1.id
+    ).first()
+    
+    db_plan_exercise2 = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan.id,
+        PlanExercise.exercise_id == exercise2.id
+    ).first()
+    
+    assert db_plan_exercise1.order == 2
+    assert db_plan_exercise2.order == 1
+    
+    # Verify the response contains the updated plan with exercises in the new order
+    plan_data = response.json()
+    exercises = sorted(plan_data["exercises"], key=lambda x: x["order"])
+    assert exercises[0]["exercise_id"] == exercise2.id
+    assert exercises[1]["exercise_id"] == exercise1.id 

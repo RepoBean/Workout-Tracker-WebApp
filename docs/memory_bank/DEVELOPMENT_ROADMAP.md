@@ -15,7 +15,7 @@
 ### Database Setup
 - [x] Create database models
 - [ ] Create database migrations
-- [ ] Create seed data for testing
+- [x] Create seed data for testing
 - [x] Set up database connection pool
 - [x] Add database indexes
 
@@ -34,7 +34,7 @@
 - [x] Add exercise search and filtering
 - [x] Implement exercise categorization
 - [x] Create exercise detail views
-- [ ] Create exercise database with pre-populated exercises
+- [x] Create exercise database with pre-populated exercises
 
 ### Workout Plan Management
 - [x] Implement workout plan CRUD operations
@@ -85,7 +85,7 @@
 
 ### Data Import/Export
 - [x] Design export endpoints (JSON for plans, CSV for history)
-- [x] Implement workout plan JSON export
+- [ ] Implement workout plan JSON export
 - [x] Add workout plan import functionality
 - [ ] Create workout history CSV export
 - [ ] Implement data backup functionality
@@ -112,6 +112,12 @@
   - [x] Configure test database (SQLite)
   - [x] Implement authentication tests
   - [ ] Complete tests for all API endpoints
+- [x] Create frontend unit tests
+  - [x] Set up Jest and React Testing Library
+  - [x] Implement test utilities and mock services
+  - [x] Add tests for auth components
+  - [x] Add tests for workout plan components
+  - [x] Add tests for exercise components
 - [ ] Create integration tests
 - [ ] Implement end-to-end testing
 - [ ] Perform security testing
@@ -176,4 +182,53 @@
 - [ ] Add calorie tracking integration
 - [ ] Implement sleep tracking connection
 - [ ] Create API for third-party integrations
-- [ ] Add workout video integration 
+- [ ] Add workout video integration
+
+## Critical Issues and Development Priorities (Updated)
+
+### Core Functionality Issues
+
+#### Workout Plan Creation and Exercise Assignment
+- **Current Issue**: Exercise assignment to specific days is counterintuitive
+- **Current Issue**: Days per week selection doesn't allow specifying which days
+- **Improvement Needed**: Allow adding exercises directly to specific days
+- **Improvement Needed**: Add explicit day selection (Mon/Tue/Wed etc.) during plan creation
+
+#### Exercise Display Problems
+- **Current Issue**: Workout plans page shows "0 exercises" when exercises exist
+- **Current Issue**: Exercise names not clearly displayed on plan detail view
+- **Current Issue**: Dashboard "next workout" section doesn't show exercises
+- **Fix Required**: Review data retrieval and display logic for exercises across the application
+
+#### Workout Session Initialization
+- **Current Issue**: "No exercises found" error when starting a workout
+- **Current Issue**: Broken connection between active plans and new workout sessions
+- **Fix Required**: Debug data flow from "start workout" to session initialization
+- **Fix Required**: Ensure exercises from active plan are properly loaded into new sessions
+
+#### Network Connectivity
+- **Current Issue**: Connection refused error when accessing from other devices (localhost:8000/api/auth/login)
+- **Fix Required**: Modify Docker configuration to bind to all interfaces (0.0.0.0)
+- **Fix Required**: Ensure frontend is configured to use correct backend URL for external access
+
+### Development Approach
+
+#### Database Management Strategy
+- For development phase, prioritize recreating the database rather than implementing migrations
+- Update models with needed changes, then drop and recreate database
+- Update seed files to populate with test data
+- Implement proper migrations later when schema stabilizes
+
+#### Immediate Next Steps (Priority Order)
+1. Fix network connectivity issues to enable testing from external devices
+2. Address workout plan creation and exercise assignment flow
+3. Fix exercise display across the application
+4. Correct workout session initialization
+5. Implement proper error handling and user feedback
+6. Then proceed with previously identified priorities (export functionality, PWA features)
+
+#### Deferred Priorities
+- Database migrations implementation (deferred until schema stabilizes)
+- Export functionality (JSON workout plans, CSV history)
+- PWA offline functionality
+- Expanded test coverage 

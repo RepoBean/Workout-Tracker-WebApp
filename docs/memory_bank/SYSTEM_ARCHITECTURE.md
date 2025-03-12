@@ -152,6 +152,66 @@ As of the current implementation:
 - GET `/api/progress/personal-records` - Get personal records (Implemented)
 - GET `/api/progress/summary` - Get workout summary stats (Implemented)
 
+## API Request/Response Formats
+
+### Workout Plan Exercise Reordering
+The endpoint for reordering exercises in a workout plan has specific format requirements:
+
+**Endpoint**: POST `/api/plans/{id}/exercises/reorder`
+
+**Request Format**:
+```json
+[
+  {"exercise_id": 1, "new_order": 3},
+  {"exercise_id": 2, "new_order": 1},
+  {"exercise_id": 3, "new_order": 2}
+]
+```
+
+Note that the payload is a direct array/list of objects, not wrapped in a parent object. Each object must contain:
+- `exercise_id`: The ID of the exercise to reorder
+- `new_order`: The new position (1-based) for the exercise in the plan
+
+**Response Format**:
+```json
+{
+  "id": 1,
+  "name": "My Workout Plan",
+  "description": "Plan description",
+  "is_active": true,
+  "is_public": true,
+  "owner_id": 1,
+  "exercises": [
+    {
+      "exercise_id": 2,
+      "order": 1,
+      "sets": 3,
+      "reps": 10,
+      "rest_seconds": 60,
+      "target_weight": 50.0
+    },
+    {
+      "exercise_id": 3,
+      "order": 2,
+      "sets": 4,
+      "reps": 12,
+      "rest_seconds": 90,
+      "target_weight": 30.0
+    },
+    {
+      "exercise_id": 1,
+      "order": 3,
+      "sets": 3,
+      "reps": 8,
+      "rest_seconds": 120,
+      "target_weight": 70.0
+    }
+  ]
+}
+```
+
+The response returns the complete workout plan with all exercises in their updated order.
+
 ## Containerization Strategy
 - Docker Compose for orchestration (Implemented)
 - Three containers: Frontend, Backend, PostgreSQL (Implemented)

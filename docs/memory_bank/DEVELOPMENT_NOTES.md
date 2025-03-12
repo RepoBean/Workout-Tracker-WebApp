@@ -108,3 +108,95 @@ To maintain code quality and consistency:
 3. Implement proper loading and error states
 4. Ensure responsive design for all components
 5. Document significant changes in the memory bank 
+
+## Frontend Testing
+
+### Effective Component Testing
+
+**Best Practices for Frontend Tests**:
+1. **Mock order matters**: Define mocks before importing the modules that use them
+   ```javascript
+   // First define mocks
+   jest.mock('react-router-dom', () => ({
+     ...jest.requireActual('react-router-dom'),
+     useNavigate: () => mockedNavigate,
+   }));
+
+   // Then import modules
+   import { useNavigate } from 'react-router-dom';
+   ```
+
+2. **Use fake timers for timeouts**:
+   ```javascript
+   // In beforeEach
+   jest.useFakeTimers();
+   
+   // In tests with timeouts
+   await act(async () => {
+     jest.advanceTimersByTime(2000);
+   });
+   
+   // In afterEach
+   jest.useRealTimers();
+   ```
+
+3. **Mock child components to isolate testing**:
+   ```javascript
+   jest.mock('../../components/ChildComponent', () => {
+     return {
+       __esModule: true,
+       default: jest.fn().mockImplementation(({ onClose, onSelect }) => (
+         <div data-testid="mock-component">
+           <button onClick={onSelect}>Select</button>
+           <button onClick={onClose}>Cancel</button>
+         </div>
+       ))
+     };
+   });
+   ```
+
+4. **Use data-testid for targeting elements**:
+   ```jsx
+   // In component
+   <div data-testid="exercise-selector">...</div>
+   
+   // In test
+   expect(screen.getByTestId("exercise-selector")).toBeInTheDocument();
+   ```
+
+### Common Testing Issues
+
+1. **Missing act() warning**: Wrap state updates in act():
+   ```javascript
+   await act(async () => {
+     fireEvent.click(button);
+   });
+   ```
+
+2. **ReferenceError in mocks**: Declare mock variables before using them:
+   ```javascript
+   // Declare before imports
+   const mockedNavigate = jest.fn();
+   
+   // Then use in mock
+   jest.mock('react-router-dom', () => ({
+     ...jest.requireActual('react-router-dom'),
+     useNavigate: () => mockedNavigate,
+   }));
+   ```
+
+3. **Import order issues**: Follow this pattern for imports in tests:
+   ```javascript
+   // 1. React and testing libraries
+   import React from 'react';
+   import { render, screen, fireEvent } from '@testing-library/react';
+   
+   // 2. Mock declarations
+   jest.mock('../../utils/api');
+   
+   // 3. Imports of mocked dependencies
+   import { api } from '../../utils/api';
+   
+   // 4. Component under test
+   import MyComponent from '../MyComponent';
+   ``` 

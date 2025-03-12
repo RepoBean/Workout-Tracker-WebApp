@@ -1,8 +1,8 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '../../../utils/test-utils';
-import Login from '../Login';
+import { render, screen, fireEvent, waitFor, act } from '../../../utils/test-utils';
+import '@testing-library/jest-dom';
+import Login from '../../Login';
 import axios from 'axios';
-import { act } from 'react-dom/test-utils';
 
 // Mock useNavigate
 const mockedNavigate = jest.fn();

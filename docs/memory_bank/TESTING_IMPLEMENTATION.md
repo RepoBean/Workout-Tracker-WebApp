@@ -18,7 +18,17 @@ This document outlines the testing strategy and implementation for the Workout T
   - Login with valid credentials
   - Login with invalid credentials
 - **API Health Check**: Basic test for the root endpoint
-- **Current Coverage**: 47% overall coverage, with 97% coverage for auth endpoints
+- **Workout Plan Endpoints**: Tests for workout plan functionality 
+  - Creating workout plans (with and without exercises)
+  - Setting and retrieving active workout plans
+  - Adding exercises to workout plans
+  - Updating exercise configuration in workout plans
+  - Removing exercises from workout plans
+  - Reordering exercises within workout plans
+- **Current Coverage**: 
+  - 47% overall coverage across all endpoints 
+  - 97% coverage for auth endpoints
+  - 61% coverage for workout plan endpoints
 
 ### Backend Testing Tools
 - **pytest**: Main testing framework
@@ -28,17 +38,32 @@ This document outlines the testing strategy and implementation for the Workout T
 
 ## Frontend Testing
 
-### Planned Setup
+### Completed Setup
 - **Jest**: JavaScript testing framework
 - **React Testing Library**: Component testing utilities
 - **Mock Service Worker**: API mocking
-- **Testing Utilities**: Custom render function with providers
+- **Testing Utilities**: Custom render function with providers in `src/utils/test-utils.js`
 
-### Planned Test Coverage
-- **Authentication Components**: Login and Registration forms
-- **Navigation**: Routing and protected routes
-- **Form Validation**: Input validation and form submission
-- **Dashboard Components**: Layout and data display
+### Frontend Test Coverage
+- **Authentication Components**: Tests for Login component
+- **Workout Plan Components**: Tests for CreateWorkoutPlan and WorkoutPlans components
+- **Exercise Components**: Tests for ExerciseSelector
+- **Mock Implementation**: Mock API calls, navigation, and context providers
+
+### Common Testing Patterns
+- Using Jest mocks for components and API functions
+- Setting up fake timers to handle setTimeout calls
+- Using data-testid attributes for targeting components
+- Proper act() wrapping for asynchronous operations
+- Mock implementations for child components
+
+### Fixed Issues
+- Corrected import paths in test files
+- Fixed mock implementations for components
+- Improved error handling mocks
+- Added proper mock function setup order
+- Implemented fake timers for time-based navigation
+- Corrected test expectations for component interactions
 
 ## Test Execution
 
@@ -80,7 +105,7 @@ npm test -- -t "Login Component"
 1. **Backend Testing Expansion**:
    - [ ] Implement tests for user management endpoints
    - [ ] Create tests for exercise management CRUD operations
-   - [ ] Add tests for workout plan endpoints
+   - [x] Add tests for workout plan endpoints
    - [ ] Test workout session tracking
    - [ ] Verify progress calculation endpoints
 
@@ -105,4 +130,4 @@ npm test -- -t "Login Component"
 - [ ] Implement test coverage reporting
 
 ## Current Status
-As of the current implementation, the backend testing infrastructure has been set up with pytest and SQLite, and authentication endpoint tests have been implemented. The next priority is to expand backend tests to cover more endpoints and implement frontend testing. 
+As of the current implementation, the backend testing infrastructure has been set up with pytest and SQLite. Authentication endpoint tests have been implemented, and workout plan endpoint tests have been added with good coverage (61%). The next priority is to expand backend tests to cover more endpoints and implement frontend testing. 
