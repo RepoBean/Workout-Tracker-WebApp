@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -70,13 +70,8 @@ const Exercises = () => {
   });
   const [error, setError] = useState(null);
 
-  // Fetch exercises on component mount
-  useEffect(() => {
-    fetchExercises();
-  }, []);
-
   // Fetch all exercises
-  const fetchExercises = async () => {
+  const fetchExercises = useCallback(async () => {
     try {
       setIsLoading(true);
       setError(null);
@@ -99,7 +94,12 @@ const Exercises = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [weightUnit, convertToPreferred]);
+
+  // Fetch exercises on component mount
+  useEffect(() => {
+    fetchExercises();
+  }, [fetchExercises]);
 
   // Filter exercises when search term changes
   useEffect(() => {

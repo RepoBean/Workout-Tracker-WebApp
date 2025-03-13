@@ -62,7 +62,7 @@ const WEEKDAYS = [
 /**
  * Component for selecting exercises for workout plans
  */
-const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], selectedDays = [] }) => {
+const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], selectedDays = [], currentAddDay = null }) => {
   const { weightUnit } = useUnitSystem();
   const [exercises, setExercises] = useState([]);
   const [filteredExercises, setFilteredExercises] = useState([]);
@@ -200,7 +200,11 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
         reps: defaultValues.reps,
         rest_seconds: defaultValues.rest_seconds,
         target_weight: defaultValues.target_weight,
-        day_of_week: defaultValues.day_of_week
+        // If currentAddDay was set when opening the selector (from parent component), use that
+        day_of_week: currentAddDay || defaultValues.day_of_week,
+        progression_type: 'weight',
+        progression_value: 2.5,
+        progression_threshold: 2
       }));
     
     setConfiguredExercises(selectedExerciseObjects);
@@ -238,6 +242,16 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
       [field]: value
     };
     setConfiguredExercises(updatedExercises);
+    
+    // If day_of_week is being changed, clear the selection for this exercise
+    if (field === 'day_of_week') {
+      setSelectedExercises(prev => {
+        // If we're unselecting, don't change anything
+        if (value === null) return prev;
+        // Clear selection when moving exercise to a specific day
+        return prev.filter(id => id !== updatedExercises[index].id);
+      });
+    }
   };
 
   // Handle selection confirmation
@@ -662,7 +676,8 @@ ExerciseSelector.propTypes = {
   onClose: PropTypes.func.isRequired,
   onSelect: PropTypes.func.isRequired,
   selectedExerciseIds: PropTypes.array,
-  selectedDays: PropTypes.array
+  selectedDays: PropTypes.array,
+  currentAddDay: PropTypes.number
 };
 
 export default ExerciseSelector; 

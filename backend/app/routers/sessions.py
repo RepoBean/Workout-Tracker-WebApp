@@ -54,6 +54,22 @@ async def create_workout_session(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Not authorized to use this workout plan"
             )
+        
+        # Check for an existing in-progress session with the same plan and day
+        # to prevent duplicate entries
+        if session.day_of_week:
+            existing_session = db.query(WorkoutSession).filter(
+                WorkoutSession.user_id == current_user.id,
+                WorkoutSession.workout_plan_id == session.workout_plan_id,
+                WorkoutSession.day_of_week == session.day_of_week,
+                WorkoutSession.status == "in_progress",
+                WorkoutSession.end_time.is_(None)  # Session hasn't ended
+            ).first()
+            
+            if existing_session:
+                # Return the existing session instead of creating a new one
+                # This prevents duplicate entries
+                return existing_session
     
     # Create new workout session
     db_session = WorkoutSession(
@@ -62,7 +78,8 @@ async def create_workout_session(
         day_of_week=session.day_of_week,
         notes=session.notes,
         rating=session.rating,
-        status=session.status or "in_progress"
+        status=session.status or "in_progress",
+        start_time=session.start_time or func.now()  # Ensure start_time is provided
     )
     
     db.add(db_session)

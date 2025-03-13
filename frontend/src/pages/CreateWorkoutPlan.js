@@ -38,7 +38,10 @@ import {
   CardContent,
   Tooltip,
   Badge,
-  Switch
+  Switch,
+  Stepper,
+  Step,
+  StepLabel
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -104,18 +107,28 @@ const CreateWorkoutPlan = () => {
     reps: 10,
     rest_seconds: 60,
     target_weight: 0,
-    day_of_week: null
+    day_of_week: null,
+    progression_type: 'weight',
+    progression_value: 2.5,
+    progression_threshold: 2
   });
   const [batchConfigFields, setBatchConfigFields] = useState({
     sets: false,
     reps: false,
     rest_seconds: false,
     target_weight: false,
-    day_of_week: false
+    day_of_week: false,
+    progression_type: false,
+    progression_value: false,
+    progression_threshold: false
   });
   
   // Current day for adding exercises
   const [currentAddDay, setCurrentAddDay] = useState(null);
+  
+  // Workflow steps
+  const [currentStep, setCurrentStep] = useState(0);
+  const steps = ['Plan Details & Days', 'Assign Exercises'];
   
   // Handle form field changes
   const handleNameChange = (e) => {
@@ -358,6 +371,11 @@ const CreateWorkoutPlan = () => {
       errors.days = 'Please select at least one workout day';
     }
     
+    // Check if all exercises are assigned to days
+    if (getUnassignedExercises().length > 0) {
+      errors.exercises = 'All exercises must be assigned to workout days';
+    }
+    
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -377,8 +395,11 @@ const CreateWorkoutPlan = () => {
         reps: exercise.reps,
         rest_seconds: exercise.rest_seconds,
         target_weight: parseFloat(exercise.target_weight || 0) || 0,
-        order: index + 1,
-        day_of_week: exercise.day_of_week || null
+        order: exercise.order || index + 1, // Use existing order if available
+        day_of_week: exercise.day_of_week || null,
+        progression_type: exercise.progression_type || 'weight',
+        progression_value: parseFloat(exercise.progression_value || 2.5) || 2.5,
+        progression_threshold: parseInt(exercise.progression_threshold || 2) || 2
       }));
       
       // Convert weights to metric for storage if user preference is imperial
@@ -388,7 +409,11 @@ const CreateWorkoutPlan = () => {
         // Convert weights to kg for storage
         exercisesWithConvertedWeights = exercisesWithConvertedWeights.map(exercise => ({
           ...exercise,
-          target_weight: convertFromPreferred(parseFloat(exercise.target_weight || 0) || 0, 'kg')
+          target_weight: convertFromPreferred(parseFloat(exercise.target_weight || 0) || 0, 'kg'),
+          // Also convert progression value if the progression is weight-based
+          progression_value: exercise.progression_type === 'weight' 
+            ? convertFromPreferred(parseFloat(exercise.progression_value || 0) || 0, 'kg')
+            : exercise.progression_value
         }));
       }
       
@@ -442,7 +467,7 @@ const CreateWorkoutPlan = () => {
   
   // Exercise configuration dialog
   const exerciseConfigDialog = (
-    <Dialog open={exerciseConfigOpen} onClose={() => setExerciseConfigOpen(false)}>
+    <Dialog open={exerciseConfigOpen} onClose={() => setExerciseConfigOpen(false)} maxWidth="md">
       <DialogTitle>Configure Exercise</DialogTitle>
       <DialogContent>
         {currentExercise && (
@@ -507,6 +532,7 @@ const CreateWorkoutPlan = () => {
                     value={currentExercise.day_of_week || ''}
                     onChange={(e) => handleExerciseConfigChange('day_of_week', e.target.value)}
                     label="Workout Day"
+                    required
                   >
                     <MenuItem value="">Not assigned</MenuItem>
                     {selectedDays.map((day) => (
@@ -516,6 +542,70 @@ const CreateWorkoutPlan = () => {
                     ))}
                   </Select>
                 </FormControl>
+              </Grid>
+              
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                  Progression System
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <FormControl fullWidth>
+                  <InputLabel id="progression-type-label">Progression Type</InputLabel>
+                  <Select
+                    labelId="progression-type-label"
+                    value={currentExercise.progression_type || 'weight'}
+                    onChange={(e) => handleExerciseConfigChange('progression_type', e.target.value)}
+                    label="Progression Type"
+                  >
+                    <MenuItem value="weight">Weight Increase</MenuItem>
+                    <MenuItem value="reps">Rep Increase</MenuItem>
+                    <MenuItem value="none">None</MenuItem>
+                  </Select>
+                </FormControl>
+                <Typography variant="caption" color="text.secondary">
+                  How to progress in this exercise over time
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Progression Value"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.progression_value || ''}
+                  onChange={(e) => handleExerciseConfigChange('progression_value', Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+                  InputProps={{ 
+                    inputProps: { min: 0.5, step: 0.5 },
+                    endAdornment: <InputAdornment position="end">
+                      {currentExercise.progression_type === 'weight' ? weightUnit : 'reps'}
+                    </InputAdornment>
+                  }}
+                  disabled={currentExercise.progression_type === 'none'}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Amount to increase when progression occurs
+                </Typography>
+              </Grid>
+              
+              <Grid item xs={12} sm={6}>
+                <TextField
+                  label="Progression Threshold"
+                  type="number"
+                  fullWidth
+                  value={currentExercise.progression_threshold || ''}
+                  onChange={(e) => handleExerciseConfigChange('progression_threshold', Math.max(1, parseInt(e.target.value) || 1))}
+                  InputProps={{ 
+                    inputProps: { min: 1 },
+                    endAdornment: <InputAdornment position="end">sessions</InputAdornment>
+                  }}
+                  disabled={currentExercise.progression_type === 'none'}
+                />
+                <Typography variant="caption" color="text.secondary">
+                  Number of successful sessions before progressing
+                </Typography>
               </Grid>
             </Grid>
           </Box>
@@ -542,6 +632,13 @@ const CreateWorkoutPlan = () => {
             <Alert severity="info" sx={{ mb: 2 }}>
               Select which properties to update and set their values. Only checked properties will be changed.
             </Alert>
+          </Grid>
+          
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" gutterBottom>
+              Basic Settings
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
           </Grid>
           
           <Grid item xs={12} sm={6} md={4}>
@@ -644,6 +741,80 @@ const CreateWorkoutPlan = () => {
               </Select>
             </FormControl>
           </Grid>
+          
+          <Grid item xs={12}>
+            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+              Progression System
+            </Typography>
+            <Divider sx={{ mb: 2 }} />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.progression_type} 
+                onChange={() => handleBatchConfigFieldToggle('progression_type')}
+              />
+              <Typography>Progression Type</Typography>
+            </Box>
+            <FormControl fullWidth disabled={!batchConfigFields.progression_type}>
+              <InputLabel id="batch-progression-type-label">Type</InputLabel>
+              <Select
+                labelId="batch-progression-type-label"
+                value={batchConfigValues.progression_type || 'weight'}
+                onChange={(e) => handleBatchConfigValueChange('progression_type', e.target.value)}
+                label="Type"
+              >
+                <MenuItem value="weight">Weight Increase</MenuItem>
+                <MenuItem value="reps">Rep Increase</MenuItem>
+                <MenuItem value="none">None</MenuItem>
+              </Select>
+            </FormControl>
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.progression_value} 
+                onChange={() => handleBatchConfigFieldToggle('progression_value')}
+              />
+              <Typography>Progress Value</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.progression_value}
+              onChange={(e) => handleBatchConfigValueChange('progression_value', Math.max(0.5, parseFloat(e.target.value) || 0.5))}
+              InputProps={{ 
+                inputProps: { min: 0.5, step: 0.5 },
+                endAdornment: <InputAdornment position="end">
+                  {batchConfigValues.progression_type === 'weight' ? weightUnit : 'reps'}
+                </InputAdornment>
+              }}
+              disabled={!batchConfigFields.progression_value || batchConfigValues.progression_type === 'none'}
+            />
+          </Grid>
+          
+          <Grid item xs={12} sm={6} md={4}>
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+              <Checkbox 
+                checked={batchConfigFields.progression_threshold} 
+                onChange={() => handleBatchConfigFieldToggle('progression_threshold')}
+              />
+              <Typography>Progress Threshold</Typography>
+            </Box>
+            <TextField
+              type="number"
+              fullWidth
+              value={batchConfigValues.progression_threshold}
+              onChange={(e) => handleBatchConfigValueChange('progression_threshold', Math.max(1, parseInt(e.target.value) || 1))}
+              InputProps={{ 
+                inputProps: { min: 1 },
+                endAdornment: <InputAdornment position="end">sessions</InputAdornment>
+              }}
+              disabled={!batchConfigFields.progression_threshold || batchConfigValues.progression_type === 'none'}
+            />
+          </Grid>
         </Grid>
       </DialogContent>
       <DialogActions>
@@ -660,6 +831,28 @@ const CreateWorkoutPlan = () => {
     </Dialog>
   );
   
+  // Handle step navigation
+  const handleNextStep = () => {
+    // Validate current step before proceeding
+    if (currentStep === 0) {
+      if (!planName.trim()) {
+        setFormErrors({...formErrors, name: 'Plan name is required'});
+        return;
+      }
+      if (selectedDays.length === 0) {
+        setFormErrors({...formErrors, days: 'Please select at least one workout day'});
+        return;
+      }
+      // Clear errors and move to next step
+      setFormErrors({});
+      setCurrentStep(1);
+    }
+  };
+
+  const handlePreviousStep = () => {
+    setCurrentStep(prev => Math.max(0, prev - 1));
+  };
+
   return (
     <Box sx={{ p: 3 }}>
       {/* Header */}
@@ -677,7 +870,7 @@ const CreateWorkoutPlan = () => {
           color="primary"
           startIcon={<SaveIcon />}
           onClick={handleCreatePlan}
-          disabled={isLoading}
+          disabled={isLoading || currentStep === 0}
         >
           {isLoading ? 'Creating...' : 'Create Plan'}
         </Button>
@@ -689,188 +882,308 @@ const CreateWorkoutPlan = () => {
         </Alert>
       )}
       
-      {/* Plan details form */}
-      <Paper sx={{ mb: 3, p: 3 }}>
-        <Typography variant="h6" component="h2" gutterBottom>
-          Plan Details
-        </Typography>
-        
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <TextField
-              label="Plan Name"
-              fullWidth
-              required
-              value={planName}
-              onChange={handleNameChange}
-              error={!!formErrors.name}
-              helperText={formErrors.name}
-              disabled={isLoading}
-            />
-          </Grid>
-          
-          <Grid item xs={12}>
-            <TextField
-              label="Description"
-              fullWidth
-              multiline
-              rows={3}
-              value={planDescription}
-              onChange={handleDescriptionChange}
-              disabled={isLoading}
-            />
-          </Grid>
-          
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom>
-              Workout Days
-            </Typography>
-            {formErrors.days && (
-              <Alert severity="error" sx={{ mb: 2 }}>
-                {formErrors.days}
-              </Alert>
-            )}
-            <FormGroup row>
-              {WEEKDAYS.map((day) => (
-                <FormControlLabel
-                  key={day.value}
-                  control={
-                    <Checkbox
-                      checked={selectedDays.includes(day.value)}
-                      onChange={() => handleDayToggle(day.value)}
-                      disabled={isLoading}
-                    />
-                  }
-                  label={day.name}
-                />
-              ))}
-            </FormGroup>
-          </Grid>
-          
-          <Grid item xs={12} sm={6}>
-            <TextField
-              label="Duration (Weeks)"
-              type="number"
-              fullWidth
-              value={durationWeeks}
-              onChange={(e) => setDurationWeeks(Math.max(0, parseInt(e.target.value) || 0))}
-              InputProps={{ inputProps: { min: 0 } }}
-              helperText="Recommended program length in weeks (0 for ongoing)"
-            />
-          </Grid>
-        </Grid>
-      </Paper>
+      {/* Stepper */}
+      <Stepper activeStep={currentStep} sx={{ mb: 4 }}>
+        {steps.map((label, index) => (
+          <Step key={index}>
+            <StepLabel>{label}</StepLabel>
+          </Step>
+        ))}
+      </Stepper>
       
-      {/* Exercises section */}
-      <Paper sx={{ mb: 3, p: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-          <Typography variant="h6" component="h2">
-            Exercises ({exercises.length})
+      {/* Step 1: Plan Details */}
+      {currentStep === 0 && (
+        <Paper sx={{ mb: 3, p: 3 }}>
+          <Typography variant="h6" component="h2" gutterBottom>
+            Plan Details
           </Typography>
           
-          <Button
-            startIcon={<AddIcon />}
-            variant="outlined"
-            onClick={() => handleAddExercises(null)}
-            disabled={isLoading || selectedDays.length === 0}
+          <Grid container spacing={3}>
+            <Grid item xs={12}>
+              <TextField
+                label="Plan Name"
+                fullWidth
+                required
+                value={planName}
+                onChange={handleNameChange}
+                error={!!formErrors.name}
+                helperText={formErrors.name}
+                disabled={isLoading}
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <TextField
+                label="Description"
+                fullWidth
+                multiline
+                rows={3}
+                value={planDescription}
+                onChange={handleDescriptionChange}
+                disabled={isLoading}
+              />
+            </Grid>
+            
+            <Grid item xs={12} sm={6}>
+              <TextField
+                label="Duration (Weeks)"
+                type="number"
+                fullWidth
+                value={durationWeeks}
+                onChange={(e) => setDurationWeeks(Math.max(0, parseInt(e.target.value) || 0))}
+                InputProps={{ inputProps: { min: 0 } }}
+                helperText="Recommended program length in weeks (0 for ongoing)"
+              />
+            </Grid>
+            
+            <Grid item xs={12}>
+              <Typography variant="subtitle1" gutterBottom>
+                Workout Days
+              </Typography>
+              {formErrors.days && (
+                <Alert severity="error" sx={{ mb: 2 }}>
+                  {formErrors.days}
+                </Alert>
+              )}
+              <FormGroup row>
+                {WEEKDAYS.map((day) => (
+                  <FormControlLabel
+                    key={day.value}
+                    control={
+                      <Checkbox
+                        checked={selectedDays.includes(day.value)}
+                        onChange={() => handleDayToggle(day.value)}
+                        disabled={isLoading}
+                      />
+                    }
+                    label={day.name}
+                  />
+                ))}
+              </FormGroup>
+            </Grid>
+          </Grid>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={handleNextStep}
+              disabled={selectedDays.length === 0 || !planName.trim()}
+            >
+              Continue to Exercise Assignment
+            </Button>
+          </Box>
+        </Paper>
+      )}
+      
+      {/* Step 2: Exercise Assignment */}
+      {currentStep === 1 && (
+        <Paper sx={{ mb: 3, p: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Typography variant="h6" component="h2">
+              Exercises ({exercises.length})
+            </Typography>
+            
+            <Button
+              startIcon={<AddIcon />}
+              variant="outlined"
+              onClick={() => handleAddExercises(expandedDay)}
+              disabled={isLoading}
+            >
+              Add Exercises
+            </Button>
+          </Box>
+          
+          {formErrors.exercises && (
+            <Alert severity="error" sx={{ mb: 2 }}>
+              {formErrors.exercises}
+            </Alert>
+          )}
+          
+          {/* Batch actions section */}
+          {selectedExerciseIds.length > 0 && (
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              bgcolor: 'action.hover', 
+              p: 2, 
+              borderRadius: 1,
+              mb: 2
+            }}>
+              <Typography variant="subtitle1" sx={{ mr: 2 }}>
+                {selectedExerciseIds.length} exercises selected
+              </Typography>
+              
+              <Button 
+                size="small" 
+                onClick={handleOpenBatchConfig}
+                startIcon={<TuneIcon />}
+                sx={{ mr: 1 }}
+              >
+                Configure
+              </Button>
+              
+              <FormControl size="small" sx={{ minWidth: 120, mx: 1 }}>
+                <InputLabel id="move-to-day-label">Move to</InputLabel>
+                <Select
+                  labelId="move-to-day-label"
+                  value=""
+                  label="Move to"
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      handleMoveSelectedExercises(e.target.value);
+                    }
+                  }}
+                  displayEmpty
+                >
+                  <MenuItem value="" disabled>Select day</MenuItem>
+                  <MenuItem value={null}>Unassigned</MenuItem>
+                  {selectedDays.map(day => (
+                    <MenuItem key={day} value={day}>
+                      {getWeekdayName(day)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              
+              <Button 
+                size="small" 
+                color="error" 
+                onClick={handleRemoveSelectedExercises}
+                startIcon={<DeleteIcon />}
+                sx={{ mx: 1 }}
+              >
+                Remove
+              </Button>
+              
+              <Button 
+                size="small" 
+                onClick={handleClearExerciseSelection}
+                sx={{ ml: 'auto' }}
+              >
+                Clear Selection
+              </Button>
+            </Box>
+          )}
+          
+          {/* Unassigned exercises section */}
+          <Accordion
+            expanded={expandedDay === null}
+            onChange={handleAccordionChange(null)}
+            sx={{ mb: 2 }}
           >
-            Add Exercises
-          </Button>
-        </Box>
-        
-        {formErrors.exercises && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {formErrors.exercises}
-          </Alert>
-        )}
-        
-        {/* Only show content if days are selected */}
-        {selectedDays.length > 0 ? (
-          <>
-            {/* Batch actions section */}
-            {selectedExerciseIds.length > 0 && (
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                bgcolor: 'action.hover', 
-                p: 2, 
-                borderRadius: 1,
-                mb: 2
-              }}>
-                <Typography variant="subtitle1" sx={{ mr: 2 }}>
-                  {selectedExerciseIds.length} exercises selected
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                  Unassigned Exercises
                 </Typography>
-                
-                <Button 
-                  size="small" 
-                  onClick={handleOpenBatchConfig}
-                  startIcon={<TuneIcon />}
-                  sx={{ mr: 1 }}
+                <Badge badgeContent={getUnassignedExercises().length} color="error" sx={{ mr: 2 }} />
+                <Button
+                  size="small"
+                  startIcon={<AddIcon />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleAddExercises(null);
+                  }}
+                  sx={{ mr: 2 }}
                 >
-                  Configure
-                </Button>
-                
-                <FormControl size="small" sx={{ minWidth: 120, mx: 1 }}>
-                  <InputLabel id="move-to-day-label">Move to</InputLabel>
-                  <Select
-                    labelId="move-to-day-label"
-                    value=""
-                    label="Move to"
-                    onChange={(e) => {
-                      if (e.target.value) {
-                        handleMoveSelectedExercises(e.target.value);
-                      }
-                    }}
-                    displayEmpty
-                  >
-                    <MenuItem value="" disabled>Select day</MenuItem>
-                    <MenuItem value={null}>Unassigned</MenuItem>
-                    {selectedDays.map(day => (
-                      <MenuItem key={day} value={day}>
-                        {getWeekdayName(day)}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-                
-                <Button 
-                  size="small" 
-                  color="error" 
-                  onClick={handleRemoveSelectedExercises}
-                  startIcon={<DeleteIcon />}
-                  sx={{ mx: 1 }}
-                >
-                  Remove
-                </Button>
-                
-                <Button 
-                  size="small" 
-                  onClick={handleClearExerciseSelection}
-                  sx={{ ml: 'auto' }}
-                >
-                  Clear Selection
+                  Add
                 </Button>
               </Box>
-            )}
-            
-            {/* Unassigned exercises section */}
+            </AccordionSummary>
+            <AccordionDetails>
+              {getUnassignedExercises().length === 0 ? (
+                <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                  No unassigned exercises. All exercises are assigned to workout days.
+                </Typography>
+              ) : (
+                <Box sx={{ mb: 2 }}>
+                  {/* Select all checkbox */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                    <Checkbox
+                      checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
+                      indeterminate={
+                        getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
+                        !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
+                      }
+                      onChange={() => handleSelectAllForDay(null)}
+                    />
+                    <Typography>Select All</Typography>
+                  </Box>
+                  
+                  {/* Exercise List */}
+                  <List>
+                    {getUnassignedExercises().map((exercise, index) => (
+                      <ListItem 
+                        key={exercise.id} 
+                        divider
+                        secondaryAction={
+                          <IconButton
+                            edge="end"
+                            onClick={() => handleRemoveExercise(exercise.id)}
+                          >
+                            <DeleteIcon />
+                          </IconButton>
+                        }
+                        sx={{ 
+                          bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                          '&:hover': { bgcolor: 'action.hover' }
+                        }}
+                      >
+                        <Checkbox
+                          checked={selectedExerciseIds.includes(exercise.id)}
+                          onChange={() => handleToggleExerciseSelection(exercise.id)}
+                          edge="start"
+                        />
+                        
+                        <ListItemText
+                          primary={exercise.name}
+                          secondary={
+                            <>
+                              {exercise.muscle_group}
+                              <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                              </Typography>
+                            </>
+                          }
+                        />
+                        
+                        <Button
+                          size="small"
+                          onClick={() => handleConfigureExercise(exercise)}
+                          sx={{ mr: 4 }}
+                        >
+                          Configure
+                        </Button>
+                      </ListItem>
+                    ))}
+                  </List>
+                </Box>
+              )}
+            </AccordionDetails>
+          </Accordion>
+          
+          {/* Workout day sections */}
+          {selectedDays.map(day => (
             <Accordion
-              expanded={expandedDay === null}
-              onChange={handleAccordionChange(null)}
+              key={day}
+              expanded={expandedDay === day}
+              onChange={handleAccordionChange(day)}
               sx={{ mb: 2 }}
             >
               <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                 <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
                   <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                    Unassigned Exercises
+                    {getWeekdayName(day)} Exercises
                   </Typography>
-                  <Badge badgeContent={getUnassignedExercises().length} color="primary" sx={{ mr: 2 }} />
+                  <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
                   <Button
                     size="small"
                     startIcon={<AddIcon />}
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleAddExercises(null);
+                      handleAddExercises(day);
                     }}
                     sx={{ mr: 2 }}
                   >
@@ -879,206 +1192,124 @@ const CreateWorkoutPlan = () => {
                 </Box>
               </AccordionSummary>
               <AccordionDetails>
-                {getUnassignedExercises().length === 0 ? (
+                {getExercisesForDay(day).length === 0 ? (
                   <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
-                    No unassigned exercises. Add exercises or assign all exercises to workout days.
+                    No exercises for {getWeekdayName(day)}. Add exercises to this day.
                   </Typography>
                 ) : (
                   <Box sx={{ mb: 2 }}>
                     {/* Select all checkbox */}
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                       <Checkbox
-                        checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
+                        checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
                         indeterminate={
-                          getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
-                          !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
+                          getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
+                          !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
                         }
-                        onChange={() => handleSelectAllForDay(null)}
+                        onChange={() => handleSelectAllForDay(day)}
                       />
                       <Typography>Select All</Typography>
                     </Box>
                     
-                    {/* Exercise List */}
-                    <List>
-                      {getUnassignedExercises().map((exercise, index) => (
-                        <ListItem 
-                          key={exercise.id} 
-                          divider
-                          secondaryAction={
-                            <IconButton
-                              edge="end"
-                              onClick={() => handleRemoveExercise(exercise.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          }
-                          sx={{ 
-                            bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
-                            '&:hover': { bgcolor: 'action.hover' }
-                          }}
-                        >
-                          <Checkbox
-                            checked={selectedExerciseIds.includes(exercise.id)}
-                            onChange={() => handleToggleExerciseSelection(exercise.id)}
-                            edge="start"
-                          />
-                          
-                          <ListItemText
-                            primary={exercise.name}
-                            secondary={
-                              <>
-                                {exercise.muscle_group}
-                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                  {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
-                                </Typography>
-                              </>
-                            }
-                          />
-                          
-                          <Button
-                            size="small"
-                            onClick={() => handleConfigureExercise(exercise)}
-                            sx={{ mr: 4 }}
+                    {/* Exercise List for this day */}
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId={`day-${day}`}>
+                        {(provided) => (
+                          <List
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
                           >
-                            Configure
-                          </Button>
-                        </ListItem>
-                      ))}
-                    </List>
+                            {getExercisesForDay(day).map((exercise, index) => (
+                              <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
+                                {(provided) => (
+                                  <ListItem 
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    divider
+                                    secondaryAction={
+                                      <IconButton
+                                        edge="end"
+                                        onClick={() => handleRemoveExercise(exercise.id)}
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    }
+                                    sx={{ 
+                                      bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                                      '&:hover': { bgcolor: 'action.hover' }
+                                    }}
+                                  >
+                                    <Checkbox
+                                      checked={selectedExerciseIds.includes(exercise.id)}
+                                      onChange={() => handleToggleExerciseSelection(exercise.id)}
+                                      edge="start"
+                                    />
+                                    
+                                    <ListItemIcon {...provided.dragHandleProps} sx={{ minWidth: '36px' }}>
+                                      <DragIcon />
+                                    </ListItemIcon>
+                                    
+                                    <ListItemText
+                                      primary={exercise.name}
+                                      secondary={
+                                        <>
+                                          {exercise.muscle_group}
+                                          <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                            {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                            {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                                          </Typography>
+                                        </>
+                                      }
+                                    />
+                                    
+                                    <Button
+                                      size="small"
+                                      onClick={() => handleConfigureExercise(exercise)}
+                                      sx={{ mr: 4 }}
+                                    >
+                                      Configure
+                                    </Button>
+                                  </ListItem>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </List>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
                   </Box>
                 )}
               </AccordionDetails>
             </Accordion>
+          ))}
+          
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
+            <Button
+              variant="outlined"
+              onClick={handlePreviousStep}
+            >
+              Back to Plan Details
+            </Button>
             
-            {/* Workout day sections */}
-            {selectedDays.map(day => (
-              <Accordion
-                key={day}
-                expanded={expandedDay === day}
-                onChange={handleAccordionChange(day)}
-                sx={{ mb: 2 }}
-              >
-                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                      {getWeekdayName(day)} Exercises
-                    </Typography>
-                    <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
-                    <Button
-                      size="small"
-                      startIcon={<AddIcon />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAddExercises(day);
-                      }}
-                      sx={{ mr: 2 }}
-                    >
-                      Add
-                    </Button>
-                  </Box>
-                </AccordionSummary>
-                <AccordionDetails>
-                  {getExercisesForDay(day).length === 0 ? (
-                    <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
-                      No exercises for {getWeekdayName(day)}. Add exercises to this day.
-                    </Typography>
-                  ) : (
-                    <Box sx={{ mb: 2 }}>
-                      {/* Select all checkbox */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <Checkbox
-                          checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
-                          indeterminate={
-                            getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
-                            !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
-                          }
-                          onChange={() => handleSelectAllForDay(day)}
-                        />
-                        <Typography>Select All</Typography>
-                      </Box>
-                      
-                      {/* Exercise List for this day */}
-                      <DragDropContext onDragEnd={handleDragEnd}>
-                        <Droppable droppableId={`day-${day}`}>
-                          {(provided) => (
-                            <List
-                              ref={provided.innerRef}
-                              {...provided.droppableProps}
-                            >
-                              {getExercisesForDay(day).map((exercise, index) => (
-                                <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                                  {(provided) => (
-                                    <ListItem 
-                                      ref={provided.innerRef}
-                                      {...provided.draggableProps}
-                                      divider
-                                      secondaryAction={
-                                        <IconButton
-                                          edge="end"
-                                          onClick={() => handleRemoveExercise(exercise.id)}
-                                        >
-                                          <DeleteIcon />
-                                        </IconButton>
-                                      }
-                                      sx={{ 
-                                        bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
-                                        '&:hover': { bgcolor: 'action.hover' }
-                                      }}
-                                    >
-                                      <Checkbox
-                                        checked={selectedExerciseIds.includes(exercise.id)}
-                                        onChange={() => handleToggleExerciseSelection(exercise.id)}
-                                        edge="start"
-                                      />
-                                      
-                                      <ListItemIcon {...provided.dragHandleProps} sx={{ minWidth: '36px' }}>
-                                        <DragIcon />
-                                      </ListItemIcon>
-                                      
-                                      <ListItemText
-                                        primary={exercise.name}
-                                        secondary={
-                                          <>
-                                            {exercise.muscle_group}
-                                            <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                              {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                              {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
-                                            </Typography>
-                                          </>
-                                        }
-                                      />
-                                      
-                                      <Button
-                                        size="small"
-                                        onClick={() => handleConfigureExercise(exercise)}
-                                        sx={{ mr: 4 }}
-                                      >
-                                        Configure
-                                      </Button>
-                                    </ListItem>
-                                  )}
-                                </Draggable>
-                              ))}
-                              {provided.placeholder}
-                            </List>
-                          )}
-                        </Droppable>
-                      </DragDropContext>
-                    </Box>
-                  )}
-                </AccordionDetails>
-              </Accordion>
-            ))}
-          </>
-        ) : (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Typography color="text.secondary" paragraph>
-              Please select workout days before adding exercises.
-            </Typography>
+            <Button
+              variant="contained" 
+              color="primary"
+              onClick={handleCreatePlan}
+              disabled={getUnassignedExercises().length > 0 || exercises.length === 0}
+              startIcon={<SaveIcon />}
+            >
+              Create Plan
+            </Button>
           </Box>
-        )}
-      </Paper>
+          
+          {getUnassignedExercises().length > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              Please assign all exercises to workout days before creating the plan.
+            </Alert>
+          )}
+        </Paper>
+      )}
       
       {/* Exercise selector dialog */}
       <ExerciseSelector
@@ -1087,6 +1318,7 @@ const CreateWorkoutPlan = () => {
         onSelect={handleExercisesSelected}
         selectedExerciseIds={exercises.map(e => e.id)}
         selectedDays={selectedDays}
+        currentAddDay={currentAddDay}
       />
       
       {/* Exercise configuration dialog */}

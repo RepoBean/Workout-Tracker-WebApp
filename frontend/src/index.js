@@ -8,16 +8,19 @@ import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import theme from './theme';
+import { UnitSystemProvider } from './utils/unitUtils';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
     <BrowserRouter>
       <AuthProvider>
-        <ThemeProvider theme={theme}>
-          <CssBaseline />
-          <App />
-        </ThemeProvider>
+        <UnitSystemProvider>
+          <ThemeProvider theme={theme}>
+            <CssBaseline />
+            <App />
+          </ThemeProvider>
+        </UnitSystemProvider>
       </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>

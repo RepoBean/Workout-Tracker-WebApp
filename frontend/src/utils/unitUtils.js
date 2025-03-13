@@ -1,50 +1,148 @@
-import { useAuth } from '../contexts/AuthContext';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 
-/**
- * Hook to access the user's unit system preferences
- * @returns {Object} Object containing unitSystem, weightUnit, and conversion functions
- */
-export const useUnitSystem = () => {
-  const { currentUser } = useAuth();
-  
-  // Default to metric if no preference or user is not logged in
-  const unitSystem = currentUser?.settings?.unitSystem || 'metric';
+// Create a context for unit system
+const UnitSystemContext = createContext();
+
+// Conversion rates
+const KG_TO_LB = 2.20462;
+const LB_TO_KG = 0.453592;
+
+// Provider component
+export const UnitSystemProvider = ({ children }) => {
+  // Get user preference from localStorage
+  const [unitSystem, setUnitSystem] = useState(() => {
+    const savedPreference = localStorage.getItem('unitSystem');
+    return savedPreference || 'metric'; // Default to metric if not set
+  });
+
+  // Save preference to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('unitSystem', unitSystem);
+  }, [unitSystem]);
+
+  // Toggle between metric and imperial
+  const toggleUnitSystem = () => {
+    setUnitSystem(prev => prev === 'metric' ? 'imperial' : 'metric');
+  };
+
+  // Get the appropriate weight unit
   const weightUnit = unitSystem === 'metric' ? 'kg' : 'lb';
-  
-  /**
-   * Converts a weight value to the user's preferred unit
-   * @param {number} weight - The weight value to convert
-   * @param {string} sourceUnit - The source unit ('kg' or 'lb')
-   * @returns {number} The converted weight value
-   */
-  const convertToPreferred = (weight, sourceUnit = 'kg') => {
-    if (!weight) return 0;
-    if (sourceUnit === weightUnit) return Number(weight);
+
+  // Convert to preferred unit
+  const convertToPreferred = (value, sourceUnit) => {
+    if (!value) return 0;
     
-    return sourceUnit === 'kg' 
-      ? Number((weight * 2.20462).toFixed(1))  // kg to lb
-      : Number((weight / 2.20462).toFixed(1)); // lb to kg
-  };
-  
-  /**
-   * Converts a weight value from the user's preferred unit to the specified unit
-   * @param {number} weight - The weight value to convert
-   * @param {string} targetUnit - The target unit ('kg' or 'lb')
-   * @returns {number} The converted weight value
-   */
-  const convertFromPreferred = (weight, targetUnit = 'kg') => {
-    if (!weight) return 0;
-    if (weightUnit === targetUnit) return Number(weight);
+    // Convert to number in case a string is passed
+    const numValue = Number(value);
     
-    return weightUnit === 'kg' 
-      ? Number((weight * 2.20462).toFixed(1))  // kg to lb
-      : Number((weight / 2.20462).toFixed(1)); // lb to kg
+    // If values are already in preferred unit, return as-is
+    if ((sourceUnit === 'kg' && unitSystem === 'metric') ||
+        (sourceUnit === 'lb' && unitSystem === 'imperial')) {
+      return parseFloat(numValue.toFixed(1));
+    }
+    
+    // Convert from kg to lb for imperial
+    if (sourceUnit === 'kg' && unitSystem === 'imperial') {
+      return parseFloat((numValue * KG_TO_LB).toFixed(1));
+    }
+    
+    // Convert from lb to kg for metric
+    if (sourceUnit === 'lb' && unitSystem === 'metric') {
+      return parseFloat((numValue * LB_TO_KG).toFixed(1));
+    }
+    
+    return parseFloat(numValue.toFixed(1));
   };
-  
-  return { 
-    unitSystem, 
-    weightUnit, 
+
+  // Convert from preferred unit to specified unit
+  const convertFromPreferred = (value, targetUnit) => {
+    if (!value) return 0;
+    
+    // Convert to number in case a string is passed
+    const numValue = Number(value);
+    
+    // If already in target unit, return as-is
+    if ((unitSystem === 'metric' && targetUnit === 'kg') || 
+        (unitSystem === 'imperial' && targetUnit === 'lb')) {
+      return parseFloat(numValue.toFixed(1));
+    }
+    
+    // Convert from lb to kg
+    if (unitSystem === 'imperial' && targetUnit === 'kg') {
+      return parseFloat((numValue * LB_TO_KG).toFixed(1));
+    }
+    
+    // Convert from kg to lb
+    if (unitSystem === 'metric' && targetUnit === 'lb') {
+      return parseFloat((numValue * KG_TO_LB).toFixed(1));
+    }
+    
+    return parseFloat(numValue.toFixed(1));
+  };
+
+  // Calculate plates needed for a barbell 
+  const calculatePlates = (targetWeight) => {
+    if (!targetWeight) return [];
+    
+    const numValue = Number(targetWeight);
+    
+    // Define standard plates and bar weight based on unit system
+    const barWeight = unitSystem === 'metric' ? 20 : 45; // 20kg or 45lb bar
+    
+    // Standard plate weights in kg or lb
+    const availablePlates = unitSystem === 'metric' 
+      ? [20, 15, 10, 5, 2.5, 1.25, 0.5, 0.25] 
+      : [45, 25, 10, 5, 2.5];
+    
+    // If target weight is less than bar, return empty array
+    if (numValue <= barWeight) {
+      return [];
+    }
+    
+    // Calculate weight to be added with plates (each side)
+    const weightToAdd = (numValue - barWeight) / 2;
+    
+    // Calculate plates needed (greedy algorithm)
+    const plates = [];
+    let remainingWeight = weightToAdd;
+    
+    availablePlates.forEach(plate => {
+      while (remainingWeight >= plate) {
+        plates.push(plate);
+        remainingWeight -= plate;
+      }
+    });
+    
+    // If we couldn't match exactly, round to nearest plate configuration
+    if (remainingWeight > 0 && plates.length > 0) {
+      // We're close enough to display what we have
+    }
+    
+    return plates;
+  };
+
+  // Context value
+  const value = {
+    unitSystem,
+    toggleUnitSystem,
+    weightUnit,
     convertToPreferred,
-    convertFromPreferred
+    convertFromPreferred,
+    calculatePlates
   };
-}; 
+
+  return (
+    <UnitSystemContext.Provider value={value}>
+      {children}
+    </UnitSystemContext.Provider>
+  );
+};
+
+// Custom hook to use the unit system
+export const useUnitSystem = () => {
+  const context = useContext(UnitSystemContext);
+  if (context === undefined) {
+    throw new Error('useUnitSystem must be used within a UnitSystemProvider');
+  }
+  return context;
+};

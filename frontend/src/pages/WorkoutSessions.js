@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Box, 
@@ -48,11 +48,7 @@ const WorkoutSessions = () => {
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
 
-  useEffect(() => {
-    fetchWorkoutSessions();
-  }, [tabValue]);
-
-  const fetchWorkoutSessions = async () => {
+  const fetchWorkoutSessions = useCallback(async () => {
     try {
       setIsLoading(true);
       
@@ -81,7 +77,11 @@ const WorkoutSessions = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [tabValue, weightUnit, convertToPreferred]);
+  
+  useEffect(() => {
+    fetchWorkoutSessions();
+  }, [fetchWorkoutSessions]);
 
   const handleTabChange = (event, newValue) => {
     setTabValue(newValue);

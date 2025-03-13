@@ -68,6 +68,7 @@ class WorkoutSessionBase(BaseModel):
 
 class WorkoutSessionCreate(WorkoutSessionBase):
     exercises: Optional[List[SessionExerciseCreate]] = None
+    start_time: Optional[datetime] = None
 
 class WorkoutSessionUpdate(BaseModel):
     end_time: Optional[datetime] = None

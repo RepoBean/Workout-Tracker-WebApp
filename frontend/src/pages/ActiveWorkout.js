@@ -56,6 +56,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useUnitSystem } from '../utils/unitUtils';
 import LoadingScreen from '../components/LoadingScreen';
 import { formatDistanceToNow, format } from 'date-fns';
+import PlateCalculator from '../components/workouts/PlateCalculator';
 
 const ActiveWorkout = () => {
   const { id } = useParams();
@@ -82,6 +83,7 @@ const ActiveWorkout = () => {
   const [workoutTimer, setWorkoutTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState(null);
   const [noExercisesForToday, setNoExercisesForToday] = useState(false);
+  const [sessionCreationAttempted, setSessionCreationAttempted] = useState(false);
 
   // Load session data or create new session
   useEffect(() => {
@@ -191,13 +193,17 @@ const ActiveWorkout = () => {
       }
     };
 
-    initializeSession();
-    
-    // Start workout timer
-    const interval = setInterval(() => {
-      setWorkoutTimer(prev => prev + 1);
-    }, 1000);
-    setTimerInterval(interval);
+    // Only initialize session if we haven't attempted to create one yet
+    if (!sessionCreationAttempted || !isNewSession) {
+      setSessionCreationAttempted(true);
+      initializeSession();
+      
+      // Start workout timer
+      const interval = setInterval(() => {
+        setWorkoutTimer(prev => prev + 1);
+      }, 1000);
+      setTimerInterval(interval);
+    }
     
     // Clean up timer on unmount
     return () => {
@@ -205,7 +211,7 @@ const ActiveWorkout = () => {
         clearInterval(timerInterval);
       }
     };
-  }, [id, planId, isNewSession]);
+  }, [id, planId, isNewSession, timerInterval, sessionCreationAttempted]);
 
   // Format elapsed time for display
   const formatElapsedTime = (seconds) => {
@@ -214,6 +220,11 @@ const ActiveWorkout = () => {
     const secs = seconds % 60;
     
     return `${hours > 0 ? `${hours}h ` : ''}${minutes}m ${secs}s`;
+  };
+  
+  // Add navigation handler for error case
+  const handleBackToDashboard = () => {
+    navigate('/dashboard');
   };
 
   // Handle set completion
@@ -435,18 +446,46 @@ const ActiveWorkout = () => {
   // Render error state
   if (error) {
     return (
-      <Box sx={{ mt: 4 }}>
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-        <Button 
-          variant="contained"
-          startIcon={<HomeIcon />}
-          onClick={() => navigate('/dashboard')}
-        >
-          Return to Dashboard
-        </Button>
-      </Box>
+      <Container maxWidth="md">
+        <Paper sx={{ p: 4, mt: 3 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
+            <CloseIcon color="error" fontSize="large" sx={{ mr: 2 }} />
+            <Typography variant="h5">Error Loading Workout</Typography>
+          </Box>
+          
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+          
+          <Typography variant="body1" sx={{ mb: 3 }}>
+            There was a problem starting or loading your workout session. This might be due to:
+          </Typography>
+          
+          <Box component="ul" sx={{ mb: 3 }}>
+            <Typography component="li">No exercises scheduled for today</Typography>
+            <Typography component="li">Network connectivity issues</Typography>
+            <Typography component="li">Server-side error in processing the request</Typography>
+          </Box>
+          
+          <Box sx={{ display: 'flex', justifyContent: 'flex-start', gap: 2 }}>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              onClick={handleBackToDashboard}
+              startIcon={<HomeIcon />}
+            >
+              Back to Dashboard
+            </Button>
+            <Button 
+              variant="outlined"
+              onClick={() => window.location.reload()}
+              startIcon={<ArrowBackIcon />}
+            >
+              Try Again
+            </Button>
+          </Box>
+        </Paper>
+      </Container>
     );
   }
 
@@ -622,15 +661,47 @@ const ActiveWorkout = () => {
       <Card sx={{ mb: 3 }}>
         <CardContent>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h5" component="div">
-              {currentExercise.name}
-            </Typography>
+            <Box>
+              <Typography variant="h5" component="div">
+                {currentExercise.name}
+              </Typography>
+              {currentExercise.muscle_group && (
+                <Typography variant="subtitle2" color="text.secondary">
+                  {currentExercise.muscle_group}
+                </Typography>
+              )}
+            </Box>
             <Chip 
               icon={<FitnessCenterIcon />} 
               label={`Exercise ${currentExerciseIndex + 1}/${session.exercises.length}`}
               color="primary"
               variant="outlined"
             />
+          </Box>
+          
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
+            {currentExercise.equipment && (
+              <Chip 
+                label={`Equipment: ${currentExercise.equipment}`} 
+                variant="outlined" 
+                size="small" 
+              />
+            )}
+            {currentExercise.category && (
+              <Chip 
+                label={`Type: ${currentExercise.category}`} 
+                variant="outlined" 
+                size="small" 
+              />
+            )}
+            {currentExercise.rest_seconds && (
+              <Chip 
+                icon={<TimerIcon />}
+                label={`Rest: ${currentExercise.rest_seconds}s`} 
+                variant="outlined" 
+                size="small" 
+              />
+            )}
           </Box>
           
           {currentExercise.description && (
@@ -640,6 +711,68 @@ const ActiveWorkout = () => {
           )}
           
           <Divider sx={{ my: 2 }} />
+          
+          {/* Target Section */}
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="h6" gutterBottom>
+              Target
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="subtitle2" color="text.secondary">Sets</Typography>
+                  <Typography variant="h5">{exerciseSetsCount}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="subtitle2" color="text.secondary">Reps</Typography>
+                  <Typography variant="h5">{currentExercise.target_reps || '—'}</Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="subtitle2" color="text.secondary">Weight</Typography>
+                  <Typography variant="h5">
+                    {currentExercise.target_weight ? `${currentExercise.target_weight} ${weightUnit}` : '—'}
+                  </Typography>
+                </Paper>
+              </Grid>
+              <Grid item xs={12} sm={6} md={3}>
+                <Paper sx={{ p: 2, textAlign: 'center' }}>
+                  <Typography variant="subtitle2" color="text.secondary">Progress</Typography>
+                  <Typography variant="h5">
+                    {completedSets[currentExercise.id] ? 
+                      `${Object.keys(completedSets[currentExercise.id]).length}/${exerciseSetsCount}` : 
+                      `0/${exerciseSetsCount}`
+                    }
+                  </Typography>
+                </Paper>
+              </Grid>
+            </Grid>
+          </Box>
+          
+          {/* Plate Calculator for barbell exercises with weight */}
+          {currentExercise.target_weight > 0 && currentExercise.equipment && 
+           (currentExercise.equipment.toLowerCase().includes('barbell') || 
+            ((currentExercise.name && (currentExercise.name.toLowerCase().includes('bench') || 
+             currentExercise.name.toLowerCase().includes('squat') || 
+             currentExercise.name.toLowerCase().includes('deadlift') || 
+             currentExercise.name.toLowerCase().includes('press')))
+            )
+           ) && (
+            <Box sx={{ mb: 3 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <FitnessCenterIcon />
+                <Typography variant="h6" gutterBottom>
+                  Plate Calculator
+                </Typography>
+              </Box>
+              
+              {/* Import the PlateCalculator component here */}
+              <PlateCalculator targetWeight={currentExercise.target_weight} />
+            </Box>
+          )}
           
           {/* Sets Section */}
           <Typography variant="h6" gutterBottom>
@@ -665,12 +798,14 @@ const ActiveWorkout = () => {
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'space-between',
-                      flexWrap: { xs: 'wrap', sm: 'nowrap' }
+                      flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                      border: isCompleted ? '1px solid' : 'none',
+                      borderColor: 'success.main'
                     }}
                   >
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
-                      <FitnessCenterIcon sx={{ mr: 1, color: 'text.secondary' }} />
-                      <Typography variant="subtitle1">
+                      <FitnessCenterIcon sx={{ mr: 1, color: isCompleted ? 'success.dark' : 'text.secondary' }} />
+                      <Typography variant="subtitle1" sx={{ fontWeight: isCompleted ? 'bold' : 'normal' }}>
                         Set {setNumber}
                       </Typography>
                     </Box>
@@ -712,12 +847,14 @@ const ActiveWorkout = () => {
                       <>
                         <Box sx={{ flex: 1, ml: { xs: 0, sm: 2 } }}>
                           {isCompleted ? (
-                            <Typography>
+                            <Typography sx={{ fontWeight: 'bold' }}>
                               <strong>{setWeight} {weightUnit}</strong> × <strong>{setReps} reps</strong>
                             </Typography>
                           ) : (
                             <Typography color="text.secondary">
-                              {currentExercise.target_weight ? `Target: ${currentExercise.target_weight} ${weightUnit} × ${currentExercise.target_reps} reps` : 'Ready to record'}
+                              {currentExercise.target_weight ? 
+                                `Target: ${currentExercise.target_weight} ${weightUnit} × ${currentExercise.target_reps} reps` : 
+                                'Ready to record'}
                             </Typography>
                           )}
                         </Box>
@@ -736,6 +873,7 @@ const ActiveWorkout = () => {
                             <Button
                               startIcon={<CheckIcon />}
                               variant="contained"
+                              color="success"
                               size="small"
                               onClick={() => handleEditSet(
                                 currentExercise.id, 
