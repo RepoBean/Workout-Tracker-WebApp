@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func
 from typing import List, Optional
 from datetime import datetime
@@ -67,6 +67,13 @@ async def create_workout_session(
             ).first()
             
             if existing_session:
+                # We need to load exercises explicitly since we're returning existing session
+                existing_session = db.query(WorkoutSession).options(
+                    joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+                ).filter(
+                    WorkoutSession.id == existing_session.id
+                ).first()
+                
                 # Return the existing session instead of creating a new one
                 # This prevents duplicate entries
                 return existing_session
@@ -102,10 +109,19 @@ async def create_workout_session(
             # If this session is from a plan, get the plan exercise details for target weight/reps
             plan_exercise = None
             if session.workout_plan_id:
-                plan_exercise = db.query(PlanExercise).filter(
+                # Include day_of_week in the query to get the correct plan exercise for this day
+                plan_exercise_query = db.query(PlanExercise).filter(
                     PlanExercise.workout_plan_id == session.workout_plan_id,
                     PlanExercise.exercise_id == exercise_data.exercise_id
-                ).first()
+                )
+                
+                # Filter by day_of_week if provided
+                if session.day_of_week:
+                    plan_exercise_query = plan_exercise_query.filter(
+                        PlanExercise.day_of_week == session.day_of_week
+                    )
+                
+                plan_exercise = plan_exercise_query.first()
             
             # Create session exercise
             db_session_exercise = SessionExercise(
@@ -116,14 +132,9 @@ async def create_workout_session(
                 notes=exercise_data.notes
             )
             
-            # Add additional properties to the SQLAlchemy object (these won't be saved to DB)
-            db_session_exercise.name = exercise.name
-            db_session_exercise.muscle_group = exercise.muscle_group
-            db_session_exercise.description = exercise.description
-            db_session_exercise.category = exercise.category
-            db_session_exercise.equipment = exercise.equipment
+            # No need to add extra properties like name, etc. since we'll use the relationship
             
-            # Add plan-specific details if available
+            # Add plan-specific details if available - these will now be saved to the database
             if plan_exercise:
                 db_session_exercise.target_weight = plan_exercise.target_weight
                 db_session_exercise.target_reps = plan_exercise.reps
@@ -173,12 +184,25 @@ async def create_workout_session(
             print(f"Warning: No exercises found for plan {session.workout_plan_id} on day {session.day_of_week}")
         
         for i, plan_exercise in enumerate(plan_exercises):
+            # Get the exercise details first
+            exercise = db.query(Exercise).filter(Exercise.id == plan_exercise.exercise_id).first()
+            
+            if not exercise:
+                print(f"WARNING: Exercise with id {plan_exercise.exercise_id} not found in database")
+                continue
+                
+            # Create the session exercise
             db_session_exercise = SessionExercise(
                 session_id=db_session.id,
                 exercise_id=plan_exercise.exercise_id,
                 sets_completed=0,  # Will be updated as user completes sets
                 order=plan_exercise.order,
-                notes=None
+                notes=None,
+                # Set plan-specific details directly in the database model
+                target_weight=plan_exercise.target_weight,
+                target_reps=plan_exercise.reps,
+                rest_seconds=plan_exercise.rest_seconds,
+                sets_count=plan_exercise.sets
             )
             
             db.add(db_session_exercise)
@@ -187,7 +211,14 @@ async def create_workout_session(
         
         db.refresh(db_session)
     
-    return db_session
+    # Reload the session with all relationships to ensure proper response
+    created_session = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+    ).filter(
+        WorkoutSession.id == db_session.id
+    ).first()
+    
+    return created_session
 
 @router.get("", response_model=List[WorkoutSessionResponse])
 async def get_workout_sessions(
@@ -203,7 +234,10 @@ async def get_workout_sessions(
     Get all workout sessions for the current user.
     Can filter by date range and workout plan.
     """
-    query = db.query(WorkoutSession).filter(WorkoutSession.user_id == current_user.id)
+    # Use joinedload to efficiently load related Exercise objects
+    query = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+    ).filter(WorkoutSession.user_id == current_user.id)
     
     # Apply filters if provided
     if start_date:
@@ -230,7 +264,10 @@ async def get_workout_session(
     """
     Get a specific workout session by ID.
     """
-    session = db.query(WorkoutSession).filter(
+    # Use joinedload to efficiently load related Exercise objects
+    session = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+    ).filter(
         WorkoutSession.id == session_id,
         WorkoutSession.user_id == current_user.id
     ).first()
@@ -241,29 +278,7 @@ async def get_workout_session(
             detail="Workout session not found"
         )
     
-    # Load exercise details for the session exercises
-    for session_exercise in session.exercises:
-        # Get exercise details
-        exercise = db.query(Exercise).filter(Exercise.id == session_exercise.exercise_id).first()
-        if exercise:
-            session_exercise.name = exercise.name
-            session_exercise.muscle_group = exercise.muscle_group
-            session_exercise.description = exercise.description
-            session_exercise.category = exercise.category
-            session_exercise.equipment = exercise.equipment
-        
-        # If this session is from a plan, get the plan exercise details
-        if session.workout_plan_id:
-            plan_exercise = db.query(PlanExercise).filter(
-                PlanExercise.workout_plan_id == session.workout_plan_id,
-                PlanExercise.exercise_id == session_exercise.exercise_id
-            ).first()
-            
-            if plan_exercise:
-                session_exercise.target_weight = plan_exercise.target_weight
-                session_exercise.target_reps = plan_exercise.reps
-                session_exercise.rest_seconds = plan_exercise.rest_seconds
-                session_exercise.sets_count = plan_exercise.sets
+    # No need to load plan exercise details since they're now stored directly in the session_exercises table
     
     return session
 
@@ -377,18 +392,47 @@ async def add_exercise_to_session(
     else:
         order = exercise.order
     
+    # Get plan exercise details if this session is from a plan
+    target_weight = None
+    target_reps = None
+    rest_seconds = None
+    sets_count = None
+    
+    if db_session.workout_plan_id:
+        plan_exercise_query = db.query(PlanExercise).filter(
+            PlanExercise.workout_plan_id == db_session.workout_plan_id,
+            PlanExercise.exercise_id == exercise.exercise_id
+        )
+        
+        # Filter by day_of_week if available
+        if db_session.day_of_week:
+            plan_exercise_query = plan_exercise_query.filter(
+                PlanExercise.day_of_week == db_session.day_of_week
+            )
+            
+        plan_exercise = plan_exercise_query.first()
+        
+        if plan_exercise:
+            target_weight = plan_exercise.target_weight
+            target_reps = plan_exercise.reps
+            rest_seconds = plan_exercise.rest_seconds
+            sets_count = plan_exercise.sets
+    
     # Create new session exercise
     db_session_exercise = SessionExercise(
         session_id=session_id,
         exercise_id=exercise.exercise_id,
         sets_completed=exercise.sets_completed,
         order=order,
-        notes=exercise.notes
+        notes=exercise.notes,
+        target_weight=target_weight,
+        target_reps=target_reps,
+        rest_seconds=rest_seconds,
+        sets_count=sets_count
     )
     
     db.add(db_session_exercise)
     db.commit()
-    db.refresh(db_session_exercise)
     
     # Add sets if provided
     if exercise.sets:
@@ -405,9 +449,15 @@ async def add_exercise_to_session(
             db.add(db_set)
         
         db.commit()
-        db.refresh(db_session_exercise)
     
-    return db_session_exercise
+    # Reload the session exercise with exercise relationship
+    session_exercise = db.query(SessionExercise).options(
+        joinedload(SessionExercise.exercise)
+    ).filter(
+        SessionExercise.id == db_session_exercise.id
+    ).first()
+    
+    return session_exercise
 
 @router.put("/{session_id}/exercises/{exercise_id}", response_model=SessionExerciseResponse)
 async def update_session_exercise(

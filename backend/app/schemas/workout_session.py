@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
+from app.schemas.exercise import ExerciseResponse
 
 # Exercise Set schemas
 class ExerciseSetBase(BaseModel):
@@ -45,15 +46,33 @@ class SessionExerciseResponse(SessionExerciseBase):
     id: int
     session_id: int
     sets: List[ExerciseSetResponse] = []
-    name: Optional[str] = None
-    muscle_group: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    equipment: Optional[str] = None
+    
+    exercise: Optional[ExerciseResponse] = None
+    
     target_weight: Optional[float] = None
     target_reps: Optional[int] = None
     rest_seconds: Optional[int] = None
     sets_count: Optional[int] = None
+    
+    @property
+    def name(self) -> Optional[str]:
+        return self.exercise.name if self.exercise else None
+        
+    @property
+    def description(self) -> Optional[str]:
+        return self.exercise.description if self.exercise else None
+        
+    @property
+    def muscle_group(self) -> Optional[str]:
+        return self.exercise.muscle_group if self.exercise else None
+        
+    @property
+    def category(self) -> Optional[str]:
+        return self.exercise.category if self.exercise else None
+        
+    @property
+    def equipment(self) -> Optional[str]:
+        return self.exercise.equipment if self.exercise else None
     
     class Config:
         from_attributes = True

@@ -191,8 +191,22 @@
 #### Workout Plan Creation and Exercise Assignment
 - **Current Issue**: Exercise assignment to specific days is counterintuitive
 - **Current Issue**: Days per week selection doesn't allow specifying which days
+- **Current Issue**: UI allows adding exercises to "Unassigned days" which is confusing
+- **Current Issue**: When configuring exercises after selecting a specific day, UI still allows changing the workout day
 - **Improvement Needed**: Allow adding exercises directly to specific days
 - **Improvement Needed**: Add explicit day selection (Mon/Tue/Wed etc.) during plan creation
+- **Improvement Needed**: Remove or clarify the "Unassigned days" option
+
+#### Active Workout Session Issues
+- **Current Issue**: Exercise names not displayed during active workout
+- **Current Issue**: No display of total sets/reps or target weight during workout
+- **Current Issue**: Cannot add multiple sets for an exercise
+- **Current Issue**: Weights and reps not auto-populated from plan configuration
+- **Current Issue**: Exercise progression is rigid without ability to navigate between exercises
+- **Fix Required**: Display exercise names prominently during workout
+- **Fix Required**: Show planned sets/reps/weight and allow overriding them
+- **Fix Required**: Implement multiple set tracking per exercise
+- **Fix Required**: Auto-populate weights/reps from workout plan
 
 #### Exercise Display Problems
 - **Current Issue**: Workout plans page shows "0 exercises" when exercises exist

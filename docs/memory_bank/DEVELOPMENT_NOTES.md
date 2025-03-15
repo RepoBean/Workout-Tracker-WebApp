@@ -1,6 +1,20 @@
 # Workout Tracker - Development Notes
 
-This document contains development notes, common issues, and their solutions for the Workout Tracker application.
+## Database Schema Enhancement - Session Exercises (March 14, 2024)
+
+Enhanced the `session_exercises` table in the database schema to properly store workout target values:
+
+- Added `target_weight` (FLOAT) column to store target weights from workout plans
+- Added `target_reps` (INTEGER) column to store target repetitions from plans
+- Added `rest_seconds` (INTEGER) column to store recommended rest periods
+- Added `sets_count` (INTEGER) column to store the number of sets to complete
+
+These additions ensure that when a workout session is created from a plan, the target values are properly stored in the database and available throughout the session. This fixed an issue where target values were only stored temporarily in memory but not persisted to the database.
+
+The changes included:
+1. Updating the database model in SQLAlchemy
+2. Improving the workout session creation to filter plan exercises by day_of_week
+3. Simplifying the session retrieval code by using stored values instead of temporary attributes
 
 ## Development Environment
 
@@ -108,6 +122,27 @@ To maintain code quality and consistency:
 3. Implement proper loading and error states
 4. Ensure responsive design for all components
 5. Document significant changes in the memory bank 
+
+## Known Issues
+
+### Workout Plan Creation Workflow
+
+1. **Unassigned Days Option**: The UI allows adding exercises to "Unassigned days" which is confusing and may not be necessary.
+2. **Day Selection Inconsistency**: When configuring exercises after selecting a specific day, the UI still allows changing the workout day.
+
+### Active Workout Session Problems
+
+1. **Missing Exercise Information**: 
+   - Exercise names not displayed during active workout sessions
+   - No indication of total sets/reps or target weight
+
+2. **Set Management Issues**:
+   - Cannot add multiple sets for an exercise
+   - Weights and reps not auto-populated from plan configuration
+
+3. **Workout Flow**:
+   - Exercise progression is rigid without ability to navigate between exercises
+   - Limited feedback during workout session
 
 ## Frontend Testing
 

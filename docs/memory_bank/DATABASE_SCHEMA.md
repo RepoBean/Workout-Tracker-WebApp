@@ -124,6 +124,10 @@ Records exercises performed during workout sessions.
 | sets_completed    | INTEGER   | NOT NULL                  | Number of sets completed           |
 | order             | INTEGER   | NOT NULL                  | Order in the session               |
 | notes             | TEXT      |                           | Notes about the exercise           |
+| target_weight     | FLOAT     |                           | Target weight from plan (if any)   |
+| target_reps       | INTEGER   |                           | Target reps from plan (if any)     |
+| rest_seconds      | INTEGER   |                           | Rest time between sets in seconds  |
+| sets_count        | INTEGER   |                           | Number of sets to perform          |
 
 ### `exercise_sets`
 Records individual sets within a session exercise.

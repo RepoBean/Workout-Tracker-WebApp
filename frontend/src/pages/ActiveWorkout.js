@@ -91,6 +91,7 @@ const ActiveWorkout = () => {
       try {
         setIsLoading(true);
         setError(null);
+        console.log('Initializing session, isNewSession:', isNewSession);
         
         if (isNewSession) {
           // Get current day of week (1-7, where 1 is Monday as per ISO standard)
@@ -162,6 +163,31 @@ const ActiveWorkout = () => {
         } else {
           // Load existing session
           const response = await sessionsApi.getById(id);
+          console.log('Loaded existing session:', response.data);
+          
+          // Detailed debugging of API response
+          console.log('API Response Structure:', {
+            session_id: response.data.id,
+            exercises_array: Array.isArray(response.data.exercises),
+            exercise_count: response.data.exercises ? response.data.exercises.length : 0
+          });
+          
+          // Debug exercise details
+          if (response.data.exercises) {
+            response.data.exercises.forEach(exercise => {
+              console.log(`Exercise ${exercise.id}:`, {
+                name: getExerciseProp(exercise, 'name'),
+                exercise_object: exercise.exercise,
+                target_weight: exercise.target_weight,
+                target_reps: exercise.target_reps,
+                sets_count: exercise.sets_count,
+                muscle_group: getExerciseProp(exercise, 'muscle_group'),
+                equipment: getExerciseProp(exercise, 'equipment'),
+                all_keys: Object.keys(exercise)
+              });
+            });
+          }
+          
           setSession(response.data);
           
           // Initialize completed sets data structure
@@ -278,9 +304,19 @@ const ActiveWorkout = () => {
   // Start editing a set
   const handleEditSet = (exerciseId, setNumber, defaultWeight = '', defaultReps = '') => {
     setEditingSet({ exerciseId, setNumber });
+    
+    // Get current exercise to auto-populate values if needed
+    const exercise = session.exercises.find(ex => ex.id === exerciseId);
+    
+    // Auto-populate with target values if provided and no overrides
+    const autoWeight = defaultWeight !== '' ? defaultWeight : 
+                       (exercise && exercise.target_weight ? exercise.target_weight : '');
+    const autoReps = defaultReps !== '' ? defaultReps : 
+                     (exercise && exercise.target_reps ? exercise.target_reps : '');
+    
     setEditValues({ 
-      weight: defaultWeight !== '' ? defaultWeight : '', 
-      reps: defaultReps !== '' ? defaultReps : '' 
+      weight: autoWeight, 
+      reps: autoReps 
     });
   };
 
@@ -431,6 +467,17 @@ const ActiveWorkout = () => {
     }
   };
 
+  // Update current exercise object access pattern to handle both the new nested format and old direct format
+  const getExerciseProp = (exercise, propName, defaultValue = '') => {
+    if (exercise.exercise && exercise.exercise[propName] !== undefined && exercise.exercise[propName] !== null) {
+      return exercise.exercise[propName];
+    }
+    if (exercise[propName] !== undefined && exercise[propName] !== null) {
+      return exercise[propName];
+    }
+    return defaultValue;
+  };
+
   // Render loading state
   if (isLoading) {
     return (
@@ -537,6 +584,7 @@ const ActiveWorkout = () => {
 
   // Get current exercise
   const currentExercise = session.exercises[currentExerciseIndex];
+  console.log('Current Exercise:', currentExercise); // Debug exercise data
   const exerciseSetsCount = currentExercise.sets_count || 1;
 
   // Add a new section to the return statement to handle no exercises for today
@@ -663,11 +711,11 @@ const ActiveWorkout = () => {
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Box>
               <Typography variant="h5" component="div">
-                {currentExercise.name}
+                {getExerciseProp(currentExercise, 'name', 'Unknown Exercise')}
               </Typography>
-              {currentExercise.muscle_group && (
+              {getExerciseProp(currentExercise, 'muscle_group') && (
                 <Typography variant="subtitle2" color="text.secondary">
-                  {currentExercise.muscle_group}
+                  {getExerciseProp(currentExercise, 'muscle_group')}
                 </Typography>
               )}
             </Box>
@@ -680,16 +728,16 @@ const ActiveWorkout = () => {
           </Box>
           
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-            {currentExercise.equipment && (
+            {getExerciseProp(currentExercise, 'equipment') && (
               <Chip 
-                label={`Equipment: ${currentExercise.equipment}`} 
+                label={`Equipment: ${getExerciseProp(currentExercise, 'equipment')}`} 
                 variant="outlined" 
                 size="small" 
               />
             )}
-            {currentExercise.category && (
+            {getExerciseProp(currentExercise, 'category') && (
               <Chip 
-                label={`Type: ${currentExercise.category}`} 
+                label={`Type: ${getExerciseProp(currentExercise, 'category')}`} 
                 variant="outlined" 
                 size="small" 
               />
@@ -704,9 +752,9 @@ const ActiveWorkout = () => {
             )}
           </Box>
           
-          {currentExercise.description && (
+          {getExerciseProp(currentExercise, 'description') && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {currentExercise.description}
+              {getExerciseProp(currentExercise, 'description')}
             </Typography>
           )}
           
@@ -892,6 +940,29 @@ const ActiveWorkout = () => {
                 </Grid>
               );
             })}
+            
+            {/* Add Set Button - only show if not all sets are completed */}
+            {Object.keys(completedSets[currentExercise.id] || {}).length < exerciseSetsCount && (
+              <Grid item xs={12}>
+                <Button
+                  variant="outlined"
+                  startIcon={<AddIcon />}
+                  onClick={() => {
+                    const nextSetNumber = Object.keys(completedSets[currentExercise.id] || {}).length + 1;
+                    handleEditSet(
+                      currentExercise.id,
+                      nextSetNumber,
+                      currentExercise.target_weight || '',
+                      currentExercise.target_reps || ''
+                    );
+                  }}
+                  fullWidth
+                  sx={{ mt: 1 }}
+                >
+                  Record Set {Object.keys(completedSets[currentExercise.id] || {}).length + 1}
+                </Button>
+              </Grid>
+            )}
           </Grid>
         </CardContent>
       </Card>
@@ -904,8 +975,15 @@ const ActiveWorkout = () => {
           onClick={handlePrevExercise}
           disabled={currentExerciseIndex === 0}
         >
-          Previous
+          Previous Exercise
         </Button>
+        
+        {/* Show completion status */}
+        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Typography variant="body2" sx={{ mr: 2 }}>
+            {Object.keys(completedSets[currentExercise.id] || {}).length}/{exerciseSetsCount} sets recorded
+          </Typography>
+        </Box>
         
         <Button
           variant="contained"

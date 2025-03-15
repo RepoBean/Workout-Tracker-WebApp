@@ -155,6 +155,17 @@ const CreateWorkoutPlan = () => {
 
   // Open exercise selector
   const handleAddExercises = (dayOfWeek = null) => {
+    // Don't allow adding exercises to unassigned days
+    if (dayOfWeek === null) {
+      // Show a warning message
+      setSnackbar({
+        open: true,
+        message: "Please select a specific day to add exercises",
+        severity: "warning"
+      });
+      return;
+    }
+    
     setCurrentAddDay(dayOfWeek);
     setSelectorOpen(true);
   };
@@ -530,6 +541,9 @@ const CreateWorkoutPlan = () => {
                   <Select
                     labelId="day-of-week-label"
                     value={currentExercise.day_of_week || ''}
+                    // If the exercise was added to a specific day, we'll keep it locked to that day
+                    // This improves UX by maintaining the user's original selection
+                    disabled={currentExercise.day_of_week !== undefined && currentExercise.day_of_week !== null && currentExercise.day_of_week !== ''}
                     onChange={(e) => handleExerciseConfigChange('day_of_week', e.target.value)}
                     label="Workout Day"
                     required
@@ -541,6 +555,11 @@ const CreateWorkoutPlan = () => {
                       </MenuItem>
                     ))}
                   </Select>
+                  {currentExercise.day_of_week && (
+                    <Typography variant="caption" color="text.secondary" sx={{ mt: 1 }}>
+                      Exercise assigned to {getWeekdayName(currentExercise.day_of_week)}
+                    </Typography>
+                  )}
                 </FormControl>
               </Grid>
               

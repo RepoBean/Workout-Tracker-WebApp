@@ -110,16 +110,21 @@ class SessionExercise(Base):
     __tablename__ = "session_exercises"
     
     id = Column(Integer, primary_key=True, index=True)
-    session_id = Column(Integer, ForeignKey("workout_sessions.id", ondelete="CASCADE"), nullable=False)
-    exercise_id = Column(Integer, ForeignKey("exercises.id"), nullable=False)
-    sets_completed = Column(Integer, nullable=False)
-    order = Column(Integer, nullable=False)
+    session_id = Column(Integer, ForeignKey("workout_sessions.id", ondelete="CASCADE"))
+    exercise_id = Column(Integer, ForeignKey("exercises.id"))
+    sets_completed = Column(Integer, default=0)
+    order = Column(Integer)
     notes = Column(Text, nullable=True)
+    # Add columns for plan-specific exercise details
+    target_weight = Column(Float, nullable=True)
+    target_reps = Column(Integer, nullable=True)
+    rest_seconds = Column(Integer, nullable=True)
+    sets_count = Column(Integer, nullable=True)
     
     # Relationships
     session = relationship("WorkoutSession", back_populates="exercises")
     exercise = relationship("Exercise", back_populates="session_exercises")
-    sets = relationship("ExerciseSet", back_populates="session_exercise", cascade="all, delete-orphan")
+    sets = relationship("ExerciseSet", back_populates="session_exercise", cascade="all, delete-orphan", lazy="joined")
 
 class ExerciseSet(Base):
     __tablename__ = "exercise_sets"
