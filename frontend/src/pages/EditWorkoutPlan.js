@@ -508,8 +508,8 @@ const EditWorkoutPlan = () => {
                   }}
                 >
                   {exercises.map((exercise, index) => (
-                    <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                      {(provided) => (
+                    <Draggable key={String(exercise.id)} draggableId={String(exercise.id)} index={index}>
+                      {(provided, snapshot) => (
                         <ListItem
                           ref={provided.innerRef}
                           {...provided.draggableProps}
@@ -524,10 +524,30 @@ const EditWorkoutPlan = () => {
                               <DeleteIcon />
                             </IconButton>
                           }
+                          sx={{ 
+                            bgcolor: 'inherit',
+                            '&:hover': { bgcolor: 'action.hover' },
+                            // Add better visual feedback during dragging
+                            boxShadow: snapshot.isDragging ? 3 : 0,
+                            opacity: snapshot.isDragging ? 0.8 : 1,
+                            transform: snapshot.isDragging ? 'scale(1.02)' : 'none',
+                            transition: 'box-shadow 0.2s, opacity 0.2s, transform 0.2s'
+                          }}
                         >
-                          <ListItemIcon {...provided.dragHandleProps}>
+                          <Box 
+                            {...provided.dragHandleProps}
+                            sx={{ 
+                              display: 'flex',
+                              alignItems: 'center',
+                              cursor: 'grab',
+                              '&:active': { cursor: 'grabbing' },
+                              mr: 1,
+                              color: 'primary.main',
+                              '&:hover': { color: 'secondary.main' }
+                            }}
+                          >
                             <DragIcon />
-                          </ListItemIcon>
+                          </Box>
                           
                           <ListItemIcon>
                             <FitnessCenterIcon />

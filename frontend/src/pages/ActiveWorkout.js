@@ -127,6 +127,9 @@ const ActiveWorkout = () => {
                   return;
                 }
                 
+                // Sort exercises by their order field before processing further
+                response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+                
                 setSession(response.data);
               } else {
                 // No active plan, create a blank custom workout
@@ -163,6 +166,9 @@ const ActiveWorkout = () => {
               return;
             }
             
+            // Sort exercises by their order field before processing further
+            response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+            
             setSession(response.data);
           }
         } else {
@@ -179,6 +185,9 @@ const ActiveWorkout = () => {
           
           // Debug exercise details
           if (response.data.exercises) {
+            // Sort exercises by their order field before processing further
+            response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+            
             response.data.exercises.forEach(exercise => {
               console.log(`Exercise ${exercise.id}:`, {
                 name: getExerciseProp(exercise, 'name'),
@@ -1129,13 +1138,7 @@ const ActiveWorkout = () => {
                               return Math.round(parseFloat(value));
                             }
                             
-                            // For imperial unit system, convert from original target weight (in kg)
-                            if (unitSystem === 'imperial' && exercise?.original_target_weight) {
-                              // Round to whole number for display
-                              return Math.round(exercise.original_target_weight * 2.20462);
-                            }
-                            
-                            // Fallback to target weight (which should be in kg)
+                            // Use the already converted target_weight directly (avoid double conversion)
                             return exercise?.target_weight ? Math.round(exercise.target_weight) : '';
                           })()}
                           onChange={(e) => {

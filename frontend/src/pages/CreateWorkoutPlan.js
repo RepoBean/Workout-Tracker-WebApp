@@ -367,17 +367,111 @@ const CreateWorkoutPlan = () => {
   const handleDragEnd = (result) => {
     if (!result.destination) return;
     
-    const items = Array.from(exercises);
-    const [reorderedItem] = items.splice(result.source.index, 1);
-    items.splice(result.destination.index, 0, reorderedItem);
+    console.log('Drag result:', result); // Debug logging
     
-    // Update order property on exercises
-    const reorderedExercises = items.map((item, index) => ({
-      ...item,
-      order: index + 1
-    }));
+    const { source, destination } = result;
     
-    setExercises(reorderedExercises);
+    // Extract the day from the droppableId (format: 'day-X' or 'unassigned')
+    const sourceDay = source.droppableId === 'unassigned' 
+      ? null 
+      : parseInt(source.droppableId.replace('day-', ''));
+    
+    const destinationDay = destination.droppableId === 'unassigned' 
+      ? null 
+      : parseInt(destination.droppableId.replace('day-', ''));
+    
+    // If dragging within the same day/context, use simple reordering
+    if (source.droppableId === destination.droppableId) {
+      const items = Array.from(exercises);
+      const dayExercises = items.filter(ex => 
+        (sourceDay === null && !ex.day_of_week) || ex.day_of_week === sourceDay
+      );
+      
+      // Get the exercise being moved
+      const [movedItem] = dayExercises.splice(source.index, 1);
+      dayExercises.splice(destination.index, 0, movedItem);
+      
+      // Update all exercises, replacing only the ones for this day
+      const updatedExercises = items.filter(ex => 
+        !((sourceDay === null && !ex.day_of_week) || ex.day_of_week === sourceDay)
+      );
+      
+      // Add reordered exercises with updated order values
+      const reorderedDayExercises = dayExercises.map((item, index) => ({
+        ...item,
+        order: index + 1
+      }));
+      
+      updatedExercises.push(...reorderedDayExercises);
+      
+      setExercises(updatedExercises);
+      return;
+    }
+    
+    // If dragging between different days, we need to update the day_of_week property
+    console.log(`Moving from ${sourceDay ? 'day ' + sourceDay : 'unassigned'} to ${destinationDay ? 'day ' + destinationDay : 'unassigned'}`);
+    
+    // Find all exercises by source day
+    const sourceExercises = exercises.filter(ex => 
+      (sourceDay === null && !ex.day_of_week) || ex.day_of_week === sourceDay
+    );
+    
+    // Get the moved exercise
+    const movedExercise = sourceExercises[source.index];
+    
+    // Update the moved exercise with new day
+    const updatedMovedExercise = {
+      ...movedExercise,
+      day_of_week: destinationDay
+    };
+    
+    // Remove the moved exercise from the list
+    const exercisesWithoutMoved = exercises.filter(ex => ex.id !== movedExercise.id);
+    
+    // Find destination day exercises to determine insertion position
+    const destinationExercises = exercisesWithoutMoved.filter(ex => 
+      (destinationDay === null && !ex.day_of_week) || ex.day_of_week === destinationDay
+    );
+    
+    // Create the new exercises array with the moved exercise inserted at the right position
+    let newExercises = [];
+    let insertedMove = false;
+    
+    // Group the exercises by day for proper ordering
+    const dayGroups = {};
+    
+    exercises.forEach(ex => {
+      if (ex.id === movedExercise.id) return; // Skip the moved exercise
+      
+      const day = ex.day_of_week || 'unassigned';
+      if (!dayGroups[day]) dayGroups[day] = [];
+      dayGroups[day].push(ex);
+    });
+    
+    // Add the moved exercise to its new day group
+    const targetDay = destinationDay || 'unassigned';
+    if (!dayGroups[targetDay]) dayGroups[targetDay] = [];
+    
+    // Insert at the right position in the day group
+    if (destination.index === 0) {
+      dayGroups[targetDay].unshift(updatedMovedExercise);
+    } else if (destination.index >= dayGroups[targetDay].length) {
+      dayGroups[targetDay].push(updatedMovedExercise);
+    } else {
+      dayGroups[targetDay].splice(destination.index, 0, updatedMovedExercise);
+    }
+    
+    // Combine all exercises with updated order values
+    newExercises = [];
+    Object.entries(dayGroups).forEach(([day, dayExercises]) => {
+      newExercises.push(...dayExercises.map((ex, idx) => ({
+        ...ex,
+        order: idx + 1
+      })));
+    });
+    
+    console.log('New exercises array:', newExercises);
+    setExercises(newExercises);
   };
   
   // Validate form
@@ -1099,164 +1193,64 @@ const CreateWorkoutPlan = () => {
             </Box>
           )}
           
-          {/* Unassigned exercises section - only show if there are unassigned exercises */}
-          {getUnassignedExercises().length > 0 && (
-            <Accordion
-              expanded={expandedDays.includes(null)}
-              onChange={handleAccordionChange(null)}
-              sx={{ mb: 2 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                    Unassigned Exercises
-                  </Typography>
-                  <Badge badgeContent={getUnassignedExercises().length} color="error" sx={{ mr: 2 }} />
-                  <Button
-                    size="small"
-                    startIcon={<AddIcon />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddExercises(null);
-                    }}
-                    sx={{ mr: 2 }}
-                  >
-                    Add
-                  </Button>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                {getUnassignedExercises().length === 0 ? (
-                  <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
-                    No unassigned exercises. All exercises are assigned to workout days.
-                  </Typography>
-                ) : (
-                  <Box sx={{ mb: 2 }}>
-                    {/* Select all checkbox */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Checkbox
-                        checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
-                        indeterminate={
-                          getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
-                          !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
-                        }
-                        onChange={() => handleSelectAllForDay(null)}
-                      />
-                      <Typography>Select All</Typography>
-                    </Box>
-                    
-                    {/* Exercise List */}
-                    <List>
-                      {getUnassignedExercises().map((exercise, index) => (
-                        <ListItem 
-                          key={exercise.id} 
-                          divider
-                          secondaryAction={
-                            <IconButton
-                              edge="end"
-                              onClick={() => handleRemoveExercise(exercise.id)}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          }
-                          sx={{ 
-                            bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
-                            '&:hover': { bgcolor: 'action.hover' }
-                          }}
-                        >
-                          <Checkbox
-                            checked={selectedExerciseIds.includes(exercise.id)}
-                            onChange={() => handleToggleExerciseSelection(exercise.id)}
-                            edge="start"
-                          />
-                          
-                          <ListItemText
-                            primary={exercise.name}
-                            secondary={
-                              <>
-                                {exercise.muscle_group}
-                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                  {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
-                                </Typography>
-                              </>
-                            }
-                          />
-                          
-                          <Button
-                            size="small"
-                            onClick={() => handleConfigureExercise(exercise)}
-                            sx={{ mr: 4 }}
-                          >
-                            Configure
-                          </Button>
-                        </ListItem>
-                      ))}
-                    </List>
+          {/* Wrap all exercise sections in a single DragDropContext */}
+          <DragDropContext onDragEnd={handleDragEnd}>
+            {/* Unassigned exercises section - only show if there are unassigned exercises */}
+            {getUnassignedExercises().length > 0 && (
+              <Accordion
+                expanded={expandedDays.includes(null)}
+                onChange={handleAccordionChange(null)}
+                sx={{ mb: 2 }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                      Unassigned Exercises
+                    </Typography>
+                    <Badge badgeContent={getUnassignedExercises().length} color="error" sx={{ mr: 2 }} />
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddExercises(null);
+                      }}
+                      sx={{ mr: 2 }}
+                    >
+                      Add
+                    </Button>
                   </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          )}
-          
-          {/* Workout day sections */}
-          {selectedDays.map(day => (
-            <Accordion
-              key={day}
-              expanded={expandedDays.includes(day)}
-              onChange={handleAccordionChange(day)}
-              sx={{ mb: 2 }}
-            >
-              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                    {getWeekdayName(day)} Exercises
-                  </Typography>
-                  <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
-                  <Button
-                    size="small"
-                    startIcon={<AddIcon />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleAddExercises(day);
-                    }}
-                    sx={{ mr: 2 }}
-                  >
-                    Add
-                  </Button>
-                </Box>
-              </AccordionSummary>
-              <AccordionDetails>
-                {getExercisesForDay(day).length === 0 ? (
-                  <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
-                    No exercises for {getWeekdayName(day)}. Add exercises to this day.
-                  </Typography>
-                ) : (
-                  <Box sx={{ mb: 2 }}>
-                    {/* Select all checkbox */}
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Checkbox
-                        checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
-                        indeterminate={
-                          getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
-                          !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
-                        }
-                        onChange={() => handleSelectAllForDay(day)}
-                      />
-                      <Typography>Select All</Typography>
-                    </Box>
-                    
-                    {/* Exercise List for this day */}
-                    <DragDropContext onDragEnd={handleDragEnd}>
-                      <Droppable droppableId={`day-${day}`}>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {getUnassignedExercises().length === 0 ? (
+                    <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                      No unassigned exercises. All exercises are assigned to workout days.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ mb: 2 }}>
+                      {/* Select all checkbox */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Checkbox
+                          checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
+                          indeterminate={
+                            getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
+                            !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
+                          }
+                          onChange={() => handleSelectAllForDay(null)}
+                        />
+                        <Typography>Select All</Typography>
+                      </Box>
+                      
+                      {/* Exercise List */}
+                      <Droppable droppableId="unassigned">
                         {(provided) => (
                           <List
                             ref={provided.innerRef}
                             {...provided.droppableProps}
                           >
-                            {getExercisesForDay(day).map((exercise, index) => (
-                              <Draggable key={exercise.id} draggableId={exercise.id} index={index}>
-                                {(provided) => (
+                            {getUnassignedExercises().map((exercise, index) => (
+                              <Draggable key={exercise.id} draggableId={String(exercise.id)} index={index}>
+                                {(provided, snapshot) => (
                                   <ListItem 
                                     ref={provided.innerRef}
                                     {...provided.draggableProps}
@@ -1271,7 +1265,10 @@ const CreateWorkoutPlan = () => {
                                     }
                                     sx={{ 
                                       bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
-                                      '&:hover': { bgcolor: 'action.hover' }
+                                      '&:hover': { bgcolor: 'action.hover' },
+                                      boxShadow: snapshot.isDragging ? 3 : 0,
+                                      opacity: snapshot.isDragging ? 0.8 : 1,
+                                      transition: 'box-shadow 0.2s, opacity 0.2s'
                                     }}
                                   >
                                     <Checkbox
@@ -1280,9 +1277,20 @@ const CreateWorkoutPlan = () => {
                                       edge="start"
                                     />
                                     
-                                    <ListItemIcon {...provided.dragHandleProps} sx={{ minWidth: '36px' }}>
+                                    <Box 
+                                      {...provided.dragHandleProps} 
+                                      sx={{ 
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        cursor: 'grab', 
+                                        '&:active': { cursor: 'grabbing' },
+                                        mr: 1,
+                                        color: 'primary.main',
+                                        '&:hover': { color: 'secondary.main' }
+                                      }}
+                                    >
                                       <DragIcon />
-                                    </ListItemIcon>
+                                    </Box>
                                     
                                     <ListItemText
                                       primary={exercise.name}
@@ -1312,12 +1320,145 @@ const CreateWorkoutPlan = () => {
                           </List>
                         )}
                       </Droppable>
-                    </DragDropContext>
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            )}
+            
+            {/* Workout day sections */}
+            {selectedDays.map(day => (
+              <Accordion
+                key={day}
+                expanded={expandedDays.includes(day)}
+                onChange={handleAccordionChange(day)}
+                sx={{ mb: 2 }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                      {getWeekdayName(day)} Exercises
+                    </Typography>
+                    <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddExercises(day);
+                      }}
+                      sx={{ mr: 2 }}
+                    >
+                      Add
+                    </Button>
                   </Box>
-                )}
-              </AccordionDetails>
-            </Accordion>
-          ))}
+                </AccordionSummary>
+                <AccordionDetails>
+                  {getExercisesForDay(day).length === 0 ? (
+                    <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                      No exercises for {getWeekdayName(day)}. Add exercises to this day.
+                    </Typography>
+                  ) : (
+                    <Box sx={{ mb: 2 }}>
+                      {/* Select all checkbox */}
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Checkbox
+                          checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
+                          indeterminate={
+                            getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
+                            !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
+                          }
+                          onChange={() => handleSelectAllForDay(day)}
+                        />
+                        <Typography>Select All</Typography>
+                      </Box>
+                      
+                      {/* Exercise List for this day */}
+                      <Droppable droppableId={`day-${day}`}>
+                        {(provided) => (
+                          <List
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                          >
+                            {getExercisesForDay(day).map((exercise, index) => (
+                              <Draggable key={exercise.id} draggableId={String(exercise.id)} index={index}>
+                                {(provided, snapshot) => (
+                                  <ListItem 
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    divider
+                                    secondaryAction={
+                                      <IconButton
+                                        edge="end"
+                                        onClick={() => handleRemoveExercise(exercise.id)}
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    }
+                                    sx={{ 
+                                      bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                                      '&:hover': { bgcolor: 'action.hover' },
+                                      // Add better visual feedback during dragging
+                                      boxShadow: snapshot.isDragging ? 3 : 0,
+                                      opacity: snapshot.isDragging ? 0.8 : 1,
+                                      transition: 'box-shadow 0.2s, opacity 0.2s'
+                                    }}
+                                  >
+                                    <Checkbox
+                                      checked={selectedExerciseIds.includes(exercise.id)}
+                                      onChange={() => handleToggleExerciseSelection(exercise.id)}
+                                      edge="start"
+                                    />
+                                    
+                                    <Box 
+                                      {...provided.dragHandleProps} 
+                                      sx={{ 
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        cursor: 'grab', 
+                                        '&:active': { cursor: 'grabbing' },
+                                        mr: 1,
+                                        color: 'primary.main',
+                                        '&:hover': { color: 'secondary.main' }
+                                      }}
+                                    >
+                                      <DragIcon />
+                                    </Box>
+                                    
+                                    <ListItemText
+                                      primary={exercise.name}
+                                      secondary={
+                                        <>
+                                          {exercise.muscle_group}
+                                          <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                            {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                            {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
+                                          </Typography>
+                                        </>
+                                      }
+                                    />
+                                    
+                                    <Button
+                                      size="small"
+                                      onClick={() => handleConfigureExercise(exercise)}
+                                      sx={{ mr: 4 }}
+                                    >
+                                      Configure
+                                    </Button>
+                                  </ListItem>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </List>
+                        )}
+                      </Droppable>
+                    </Box>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </DragDropContext>
           
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
             <Button
