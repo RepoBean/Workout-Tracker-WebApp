@@ -40,6 +40,7 @@ import {
 import { workoutPlansApi, handleApiError } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useUnitSystem } from '../utils/unitUtils';
+import { displayWeight } from '../utils/weightConversion';
 
 // Weekday names mapping
 const WEEKDAYS = [
@@ -55,14 +56,14 @@ const WEEKDAYS = [
 const WorkoutPlanDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { weightUnit, convertToPreferred } = useUnitSystem();
+  const { weightUnit, convertToPreferred, unitSystem } = useUnitSystem();
   
   const [plan, setPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
-  const [expandedDay, setExpandedDay] = useState(null);
+  const [expandedDays, setExpandedDays] = useState([]);
   
   // Fetch workout plan details
   useEffect(() => {
@@ -80,7 +81,7 @@ const WorkoutPlanDetail = () => {
             .map(ex => ex.day_of_week))].sort();
           
           if (days.length > 0) {
-            setExpandedDay(days[0]);
+            setExpandedDays([days[0]]);
           }
         }
       } catch (error) {
@@ -126,12 +127,7 @@ const WorkoutPlanDetail = () => {
         exercisesByDay[exercise.day_of_week].push(exercise);
       });
     
-    // Get unassigned exercises
-    const unassignedExercises = plan.exercises.filter(ex => !ex.day_of_week);
-    if (unassignedExercises.length > 0) {
-      exercisesByDay['unassigned'] = unassignedExercises;
-    }
-    
+    // We're completely removing the unassigned exercises section
     return exercisesByDay;
   };
   
@@ -149,7 +145,11 @@ const WorkoutPlanDetail = () => {
   
   // Handle accordion expansion change
   const handleAccordionChange = (day) => (event, isExpanded) => {
-    setExpandedDay(isExpanded ? day : null);
+    if (isExpanded) {
+      setExpandedDays(prev => [...prev, day]);
+    } else {
+      setExpandedDays(prev => prev.filter(d => d !== day));
+    }
   };
   
   // Handle setting this plan as active
@@ -382,7 +382,7 @@ const WorkoutPlanDetail = () => {
             {daysWithExercises.map(day => (
               <Accordion 
                 key={day} 
-                expanded={expandedDay === parseInt(day)}
+                expanded={expandedDays.includes(parseInt(day))}
                 onChange={handleAccordionChange(parseInt(day))}
                 sx={{ mb: 2 }}
               >
@@ -438,9 +438,7 @@ const WorkoutPlanDetail = () => {
                             </TableCell>
                             <TableCell align="center">
                               {exercise.target_weight > 0 
-                                ? `${weightUnit === 'lb' 
-                                    ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
-                                    : exercise.target_weight.toFixed(1)} ${weightUnit}`
+                                ? displayWeight(exercise.target_weight, unitSystem)
                                 : '-'}
                             </TableCell>
                           </TableRow>
@@ -451,76 +449,6 @@ const WorkoutPlanDetail = () => {
                 </AccordionDetails>
               </Accordion>
             ))}
-            
-            {/* Unassigned exercises */}
-            {exercisesByDay['unassigned'] && (
-              <Accordion
-                expanded={expandedDay === 'unassigned'}
-                onChange={handleAccordionChange('unassigned')}
-                sx={{ mb: 2, opacity: 0.8 }}
-              >
-                <AccordionSummary
-                  expandIcon={<ExpandMoreIcon />}
-                  aria-controls="unassigned-content"
-                  id="unassigned-header"
-                  sx={{ backgroundColor: theme => theme.palette.grey[200] }}
-                >
-                  <Typography variant="subtitle1" fontWeight="bold">
-                    Unassigned Exercises
-                    <Badge 
-                      color="default" 
-                      badgeContent={exerciseCountByDay['unassigned']} 
-                      sx={{ ml: 2 }}
-                    />
-                  </Typography>
-                </AccordionSummary>
-                <AccordionDetails>
-                  <TableContainer>
-                    <Table size="small">
-                      <TableHead>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Exercise</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Sets</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Reps</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Rest</TableCell>
-                          <TableCell align="center" sx={{ fontWeight: 'bold' }}>Weight</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {exercisesByDay['unassigned'].map((exercise) => (
-                          <TableRow key={exercise.id}>
-                            <TableCell>
-                              <Box>
-                                <Typography variant="body2" fontWeight="medium">
-                                  {exercise.name || `Exercise ID: ${exercise.exercise_id}`}
-                                </Typography>
-                                {exercise.muscle_group && (
-                                  <Typography variant="caption" color="text.secondary">
-                                    {exercise.muscle_group}
-                                  </Typography>
-                                )}
-                              </Box>
-                            </TableCell>
-                            <TableCell align="center">{exercise.sets}</TableCell>
-                            <TableCell align="center">{exercise.reps}</TableCell>
-                            <TableCell align="center">
-                              {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
-                            </TableCell>
-                            <TableCell align="center">
-                              {exercise.target_weight > 0 
-                                ? `${weightUnit === 'lb' 
-                                    ? convertToPreferred(exercise.target_weight, 'kg').toFixed(1) 
-                                    : exercise.target_weight.toFixed(1)} ${weightUnit}`
-                                : '-'}
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </AccordionDetails>
-              </Accordion>
-            )}
           </Box>
         )}
       </Box>

@@ -65,6 +65,7 @@ import ExerciseSelector from '../components/workouts/ExerciseSelector';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { useUnitSystem } from '../utils/unitUtils';
+import { displayWeight, parseWeightInput } from '../utils/weightConversion';
 
 // Define weekdays with their index values (1-7, where 1 is Monday as per ISO standard)
 const WEEKDAYS = [
@@ -79,7 +80,7 @@ const WEEKDAYS = [
 
 const CreateWorkoutPlan = () => {
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
+  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem } = useUnitSystem();
   const navigate = useNavigate();
   
   // Form state
@@ -97,7 +98,7 @@ const CreateWorkoutPlan = () => {
   const [formErrors, setFormErrors] = useState({});
   
   // New state for accordion UI
-  const [expandedDay, setExpandedDay] = useState(null);
+  const [expandedDays, setExpandedDays] = useState([]);
   
   // Batch operations state
   const [selectedExerciseIds, setSelectedExerciseIds] = useState([]);
@@ -172,7 +173,11 @@ const CreateWorkoutPlan = () => {
   
   // Handle accordion expansion
   const handleAccordionChange = (day) => (event, isExpanded) => {
-    setExpandedDay(isExpanded ? day : null);
+    if (isExpanded) {
+      setExpandedDays(prev => [...prev, day]);
+    } else {
+      setExpandedDays(prev => prev.filter(d => d !== day));
+    }
   };
   
   // Toggle exercise selection for batch operations
@@ -296,20 +301,29 @@ const CreateWorkoutPlan = () => {
   
   // Handle selected exercises from selector
   const handleExercisesSelected = (selectedExercises) => {
-    // Exercises are now fully configured with sets, reps, weights, and day assignments
-    // from the ExerciseSelector component
+    // Generate unique IDs for each day-exercise combination to allow
+    // the same exercise to appear on multiple days
+    const newExercises = selectedExercises.map(exercise => ({
+      ...exercise,
+      // Create a unique identifier for this specific exercise+day combination
+      uniqueId: `${exercise.id}-${exercise.day_of_week}`
+    }));
     
-    // Merge with existing exercises, preventing duplicates
+    // Get the existing unique IDs to prevent duplicating the exact same exercise+day combination
+    const existingUniqueIds = exercises.map(ex => ex.uniqueId || `${ex.id}-${ex.day_of_week}`);
+    
+    // Merge with existing exercises, preventing duplicates of the same exercise+day combination
+    // but allowing the same exercise to be added to different days
     const mergedExercises = [
-      ...exercises.filter(existing => !selectedExercises.some(newEx => newEx.id === existing.id)),
-      ...selectedExercises
+      ...exercises,
+      ...newExercises.filter(newEx => !existingUniqueIds.includes(newEx.uniqueId))
     ];
     
     setExercises(mergedExercises);
     
     // If adding to a specific day's accordion, expand that day
     if (currentAddDay !== null) {
-      setExpandedDay(currentAddDay);
+      setExpandedDays(prev => [...prev.filter(d => d !== currentAddDay), currentAddDay]);
     }
   };
   
@@ -530,7 +544,7 @@ const CreateWorkoutPlan = () => {
                   onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
                   InputProps={{ 
                     inputProps: { min: 0, step: 0.5 },
-                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
+                    endAdornment: <InputAdornment position="end">{unitSystem === 'metric' ? 'kg' : 'lbs'}</InputAdornment>
                   }}
                 />
               </Grid>
@@ -729,7 +743,7 @@ const CreateWorkoutPlan = () => {
               onChange={(e) => handleBatchConfigValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
               InputProps={{ 
                 inputProps: { min: 0, step: 0.5 },
-                endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
+                endAdornment: <InputAdornment position="end">{unitSystem === 'metric' ? 'kg' : 'lbs'}</InputAdornment>
               }}
               disabled={!batchConfigFields.target_weight}
             />
@@ -1006,7 +1020,7 @@ const CreateWorkoutPlan = () => {
             <Button
               startIcon={<AddIcon />}
               variant="outlined"
-              onClick={() => handleAddExercises(expandedDay)}
+              onClick={() => handleAddExercises(expandedDays.includes(null) ? null : expandedDays[0])}
               disabled={isLoading}
             >
               Add Exercises
@@ -1085,109 +1099,111 @@ const CreateWorkoutPlan = () => {
             </Box>
           )}
           
-          {/* Unassigned exercises section */}
-          <Accordion
-            expanded={expandedDay === null}
-            onChange={handleAccordionChange(null)}
-            sx={{ mb: 2 }}
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
-                  Unassigned Exercises
-                </Typography>
-                <Badge badgeContent={getUnassignedExercises().length} color="error" sx={{ mr: 2 }} />
-                <Button
-                  size="small"
-                  startIcon={<AddIcon />}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleAddExercises(null);
-                  }}
-                  sx={{ mr: 2 }}
-                >
-                  Add
-                </Button>
-              </Box>
-            </AccordionSummary>
-            <AccordionDetails>
-              {getUnassignedExercises().length === 0 ? (
-                <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
-                  No unassigned exercises. All exercises are assigned to workout days.
-                </Typography>
-              ) : (
-                <Box sx={{ mb: 2 }}>
-                  {/* Select all checkbox */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                    <Checkbox
-                      checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
-                      indeterminate={
-                        getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
-                        !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
-                      }
-                      onChange={() => handleSelectAllForDay(null)}
-                    />
-                    <Typography>Select All</Typography>
-                  </Box>
-                  
-                  {/* Exercise List */}
-                  <List>
-                    {getUnassignedExercises().map((exercise, index) => (
-                      <ListItem 
-                        key={exercise.id} 
-                        divider
-                        secondaryAction={
-                          <IconButton
-                            edge="end"
-                            onClick={() => handleRemoveExercise(exercise.id)}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
-                        }
-                        sx={{ 
-                          bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
-                          '&:hover': { bgcolor: 'action.hover' }
-                        }}
-                      >
-                        <Checkbox
-                          checked={selectedExerciseIds.includes(exercise.id)}
-                          onChange={() => handleToggleExerciseSelection(exercise.id)}
-                          edge="start"
-                        />
-                        
-                        <ListItemText
-                          primary={exercise.name}
-                          secondary={
-                            <>
-                              {exercise.muscle_group}
-                              <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
-                              </Typography>
-                            </>
-                          }
-                        />
-                        
-                        <Button
-                          size="small"
-                          onClick={() => handleConfigureExercise(exercise)}
-                          sx={{ mr: 4 }}
-                        >
-                          Configure
-                        </Button>
-                      </ListItem>
-                    ))}
-                  </List>
+          {/* Unassigned exercises section - only show if there are unassigned exercises */}
+          {getUnassignedExercises().length > 0 && (
+            <Accordion
+              expanded={expandedDays.includes(null)}
+              onChange={handleAccordionChange(null)}
+              sx={{ mb: 2 }}
+            >
+              <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                  <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                    Unassigned Exercises
+                  </Typography>
+                  <Badge badgeContent={getUnassignedExercises().length} color="error" sx={{ mr: 2 }} />
+                  <Button
+                    size="small"
+                    startIcon={<AddIcon />}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleAddExercises(null);
+                    }}
+                    sx={{ mr: 2 }}
+                  >
+                    Add
+                  </Button>
                 </Box>
-              )}
-            </AccordionDetails>
-          </Accordion>
+              </AccordionSummary>
+              <AccordionDetails>
+                {getUnassignedExercises().length === 0 ? (
+                  <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                    No unassigned exercises. All exercises are assigned to workout days.
+                  </Typography>
+                ) : (
+                  <Box sx={{ mb: 2 }}>
+                    {/* Select all checkbox */}
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                      <Checkbox
+                        checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
+                        indeterminate={
+                          getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
+                          !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
+                        }
+                        onChange={() => handleSelectAllForDay(null)}
+                      />
+                      <Typography>Select All</Typography>
+                    </Box>
+                    
+                    {/* Exercise List */}
+                    <List>
+                      {getUnassignedExercises().map((exercise, index) => (
+                        <ListItem 
+                          key={exercise.id} 
+                          divider
+                          secondaryAction={
+                            <IconButton
+                              edge="end"
+                              onClick={() => handleRemoveExercise(exercise.id)}
+                            >
+                              <DeleteIcon />
+                            </IconButton>
+                          }
+                          sx={{ 
+                            bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
+                            '&:hover': { bgcolor: 'action.hover' }
+                          }}
+                        >
+                          <Checkbox
+                            checked={selectedExerciseIds.includes(exercise.id)}
+                            onChange={() => handleToggleExerciseSelection(exercise.id)}
+                            edge="start"
+                          />
+                          
+                          <ListItemText
+                            primary={exercise.name}
+                            secondary={
+                              <>
+                                {exercise.muscle_group}
+                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                  {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
+                                </Typography>
+                              </>
+                            }
+                          />
+                          
+                          <Button
+                            size="small"
+                            onClick={() => handleConfigureExercise(exercise)}
+                            sx={{ mr: 4 }}
+                          >
+                            Configure
+                          </Button>
+                        </ListItem>
+                      ))}
+                    </List>
+                  </Box>
+                )}
+              </AccordionDetails>
+            </Accordion>
+          )}
           
           {/* Workout day sections */}
           {selectedDays.map(day => (
             <Accordion
               key={day}
-              expanded={expandedDay === day}
+              expanded={expandedDays.includes(day)}
               onChange={handleAccordionChange(day)}
               sx={{ mb: 2 }}
             >
@@ -1275,7 +1291,7 @@ const CreateWorkoutPlan = () => {
                                           {exercise.muscle_group}
                                           <Typography component="span" variant="body2" sx={{ display: 'block' }}>
                                             {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                            {exercise.target_weight > 0 && ` • ${exercise.target_weight} ${weightUnit}`}
+                                            {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
                                           </Typography>
                                         </>
                                       }

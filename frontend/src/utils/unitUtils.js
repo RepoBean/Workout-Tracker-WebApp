@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { useAuth } from '../contexts/AuthContext';
+import { userApi } from '../utils/api';
 
 // Create a context for unit system
 const UnitSystemContext = createContext();
@@ -9,20 +11,44 @@ const LB_TO_KG = 0.453592;
 
 // Provider component
 export const UnitSystemProvider = ({ children }) => {
-  // Get user preference from localStorage
-  const [unitSystem, setUnitSystem] = useState(() => {
-    const savedPreference = localStorage.getItem('unitSystem');
-    return savedPreference || 'metric'; // Default to metric if not set
-  });
-
-  // Save preference to localStorage when it changes
+  const { currentUser, updateProfile } = useAuth();
+  
+  // Get unit system from user settings or default to metric
+  const [unitSystem, setUnitSystem] = useState('metric');
+  
+  // Initialize unit system from user settings when user data is available
   useEffect(() => {
-    localStorage.setItem('unitSystem', unitSystem);
-  }, [unitSystem]);
+    if (currentUser?.settings?.unitSystem) {
+      setUnitSystem(currentUser.settings.unitSystem);
+    }
+  }, [currentUser]);
 
-  // Toggle between metric and imperial
-  const toggleUnitSystem = () => {
-    setUnitSystem(prev => prev === 'metric' ? 'imperial' : 'metric');
+  // Toggle between metric and imperial and update user settings
+  const toggleUnitSystem = async () => {
+    const newUnitSystem = unitSystem === 'metric' ? 'imperial' : 'metric';
+    setUnitSystem(newUnitSystem);
+    
+    // Update user settings in the database
+    try {
+      // Get current settings or create an empty object
+      const currentSettings = currentUser?.settings || {};
+      
+      // Update with new unit system
+      const updatedSettings = {
+        ...currentSettings,
+        unitSystem: newUnitSystem
+      };
+      
+      // Save to database
+      const response = await userApi.updateSettings(updatedSettings);
+      
+      // Update the global user context with the new settings
+      if (response.data) {
+        updateProfile(response.data);
+      }
+    } catch (error) {
+      console.error('Error updating unit system preference:', error);
+    }
   };
 
   // Get the appropriate weight unit

@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../utils/api';
+import { useUnitSystem } from '../utils/unitUtils';
 
 // Tab panel component for tab content
 function TabPanel(props) {
@@ -58,6 +59,7 @@ function TabPanel(props) {
 
 const Profile = () => {
   const { currentUser, updateProfile, logout } = useAuth();
+  const { unitSystem, toggleUnitSystem } = useUnitSystem();
   const [loading, setLoading] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -121,10 +123,18 @@ const Profile = () => {
   // Handle settings changes
   const handleSettingsChange = (e) => {
     const { name, value, checked } = e.target;
+    const newValue = e.target.type === 'checkbox' ? checked : value;
+    
+    // Update local settings state
     setSettings({
       ...settings,
-      [name]: e.target.type === 'checkbox' ? checked : value
+      [name]: newValue
     });
+    
+    // Special handling for unit system to update UnitSystemContext immediately
+    if (name === 'unitSystem' && newValue !== unitSystem) {
+      toggleUnitSystem();
+    }
   };
 
   // Handle password change form
@@ -166,7 +176,10 @@ const Profile = () => {
   const handleSaveSettings = async () => {
     try {
       setLoading(true);
-      await userApi.updateSettings(settings);
+      const response = await userApi.updateSettings(settings);
+      
+      // Update the global user context with the new user data
+      updateProfile(response.data);
       
       setSnackbar({
         open: true,

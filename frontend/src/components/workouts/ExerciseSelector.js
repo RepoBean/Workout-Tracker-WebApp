@@ -91,11 +91,13 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
   // Initialize component
   useEffect(() => {
     if (open) {
-      setSelectedExercises(selectedExerciseIds || []);
+      // Don't pre-select exercises when adding to days
+      // This allows the same exercise to be added to multiple days
+      setSelectedExercises([]);
       setActiveStep(0);
       fetchExercises();
     }
-  }, [open, selectedExerciseIds]);
+  }, [open]);
 
   // Fetch exercises from API
   const fetchExercises = async () => {
@@ -200,8 +202,8 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
         reps: defaultValues.reps,
         rest_seconds: defaultValues.rest_seconds,
         target_weight: defaultValues.target_weight,
-        // If currentAddDay was set when opening the selector (from parent component), use that
-        day_of_week: currentAddDay || defaultValues.day_of_week,
+        // Always use currentAddDay to ensure exercises are properly assigned to the selected day
+        day_of_week: currentAddDay,
         progression_type: 'weight',
         progression_value: 2.5,
         progression_threshold: 2
