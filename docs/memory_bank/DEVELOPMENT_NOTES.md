@@ -1,5 +1,35 @@
 # Workout Tracker - Development Notes
 
+## Weight Unit Conversion Improvements (May 23, 2024)
+
+Identified and resolved inconsistencies in the weight conversion system that were causing weights to be displayed incorrectly across different views:
+
+### Issues Found:
+1. **Premature Rounding**: Both `convertToPreferred` and `convertFromPreferred` functions in `unitUtils.js` were rounding values during conversion
+2. **Inconsistent Displays**: This caused:
+   - 100 lbs in workout programs displayed as 99 lbs in active workouts
+   - Values entered as 100 lbs would show as 45 kg in set fields
+   - Completed workouts would show 97 lbs for exercises done with 100 lbs weights
+
+### Solutions Implemented:
+1. **Separated Conversion from Display**:
+   - Removed rounding from core conversion functions (`convertToPreferred` and `convertFromPreferred`)
+   - Added a new `formatWeightForDisplay` function that handles rounding only at display time
+   - Ensures precise values are stored in the database and used in calculations
+
+2. **Removed Special Case Handling**:
+   - Eliminated special handling for certain exercises
+   - Standardized the weight conversion logic to be consistent across all exercise types
+
+3. **Updated UI Components**:
+   - Updated components to use the new `formatWeightForDisplay` function
+   - Ensures weights are displayed consistently throughout the application
+
+This change better adheres to best practices by:
+- Storing weights in a consistent unit (kg) in the database
+- Performing precise conversions between units without premature rounding
+- Only applying rounding for display purposes
+
 ## Database Schema Enhancement - Session Exercises (March 14, 2024)
 
 Enhanced the `session_exercises` table in the database schema to properly store workout target values:

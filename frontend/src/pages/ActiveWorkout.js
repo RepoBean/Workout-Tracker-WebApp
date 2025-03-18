@@ -64,13 +64,13 @@ const ActiveWorkout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem } = useUnitSystem();
+  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem, displayWeight } = useUnitSystem();
   
   // Extract plan_id from query params if available (for new sessions)
   const queryParams = new URLSearchParams(location.search);
   const planId = queryParams.get('plan_id');
   
-  const isNewSession = id === 'new';
+  const isNewSession = id === 'new' || !id;
   
   const [session, setSession] = useState(null);
   const [currentExerciseIndex, setCurrentExerciseIndex] = useState(0);
@@ -85,6 +85,17 @@ const ActiveWorkout = () => {
   const [noExercisesForToday, setNoExercisesForToday] = useState(false);
   const [sessionCreationAttempted, setSessionCreationAttempted] = useState(false);
   
+  // Add a ref to track the previous session ID to avoid re-initializing unnecessarily
+  const prevIdRef = React.useRef(id);
+  // Add a ref to track the session status to avoid re-rendering loops
+  const sessionStatusRef = React.useRef(null);
+  // Add a ref to track the timer state without causing re-renders
+  const timerStateRef = React.useRef({ 
+    timer: 0,
+    interval: null,
+    isRunning: false
+  });
+  
   // Add rest timer state
   const [restTimer, setRestTimer] = useState(0);
   const [isResting, setIsResting] = useState(false);
@@ -92,11 +103,28 @@ const ActiveWorkout = () => {
 
   // Load session data or create new session
   useEffect(() => {
+    // Define a function to clear any existing timers
+    const clearTimers = () => {
+      if (timerStateRef.current.interval) {
+        console.log('Clearing existing timer interval');
+        clearInterval(timerStateRef.current.interval);
+        timerStateRef.current.interval = null;
+      }
+      if (restInterval) {
+        clearInterval(restInterval);
+        setRestInterval(null);
+      }
+    };
+
+    // Define session initialization function
     const initializeSession = async () => {
       try {
         setIsLoading(true);
         setError(null);
-        console.log('Initializing session, isNewSession:', isNewSession);
+        console.log('Initializing session, isNewSession:', isNewSession, 'id:', id);
+        
+        // Clear any existing timers first
+        clearTimers();
         
         if (isNewSession) {
           // Get current day of week (1-7, where 1 is Monday as per ISO standard)
@@ -129,6 +157,40 @@ const ActiveWorkout = () => {
                 
                 // Sort exercises by their order field before processing further
                 response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+                
+                // IMPORTANT FIX: Always convert weights in the newly created session
+                if (response.data.exercises && response.data.exercises.length > 0) {
+                  console.log('New session before weight conversion (from active plan):', 
+                    response.data.exercises.map(ex => ({
+                      name: getExerciseProp(ex, 'name'),
+                      target_weight: ex.target_weight,
+                      unit_system: unitSystem
+                    }))
+                  );
+                  
+                  // Always convert weights regardless of unit system
+                  response.data.exercises = response.data.exercises.map(exercise => {
+                    // Convert weight from kg (database) to user's preferred unit (component state)
+                    const convertedWeight = exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : 0;
+                    
+                    console.log(`Converting weight for ${getExerciseProp(exercise, 'name')}: ${exercise.target_weight} kg → ${convertedWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+                    
+                    return {
+                      ...exercise,
+                      original_target_weight: exercise.target_weight, // Keep original kg value
+                      target_weight: convertedWeight // Store converted value in user's unit
+                    };
+                  });
+                  
+                  console.log('After weight conversion (from active plan):', 
+                    response.data.exercises.map(ex => ({
+                      name: getExerciseProp(ex, 'name'),
+                      original_kg: ex.original_target_weight,
+                      converted_weight: ex.target_weight,
+                      unit_system: unitSystem
+                    }))
+                  );
+                }
                 
                 setSession(response.data);
               } else {
@@ -169,18 +231,93 @@ const ActiveWorkout = () => {
             // Sort exercises by their order field before processing further
             response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
             
+            // IMPORTANT FIX: Always convert weights in the newly created session
+            if (response.data.exercises && response.data.exercises.length > 0) {
+              console.log('New session before weight conversion (from active plan):', 
+                response.data.exercises.map(ex => ({
+                  name: getExerciseProp(ex, 'name'),
+                  target_weight: ex.target_weight,
+                  unit_system: unitSystem
+                }))
+              );
+              
+              // Always convert weights regardless of unit system
+              response.data.exercises = response.data.exercises.map(exercise => {
+                // Convert weight from kg (database) to user's preferred unit (component state)
+                const convertedWeight = exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : 0;
+                
+                console.log(`Converting weight for ${getExerciseProp(exercise, 'name')}: ${exercise.target_weight} kg → ${convertedWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+                
+                return {
+                  ...exercise,
+                  original_target_weight: exercise.target_weight, // Keep original kg value
+                  target_weight: convertedWeight // Store converted value in user's unit
+                };
+              });
+              
+              console.log('After weight conversion (from active plan):', 
+                response.data.exercises.map(ex => ({
+                  name: getExerciseProp(ex, 'name'),
+                  original_kg: ex.original_target_weight,
+                  converted_weight: ex.target_weight,
+                  unit_system: unitSystem
+                }))
+              );
+            }
+            
             setSession(response.data);
+            
+            // Initialize completed sets data structure
+            const initialCompletedSets = {};
+            if (response.data.exercises) {
+              response.data.exercises.forEach(exercise => {
+                const completedExerciseSets = {};
+                if (exercise.sets) {
+                  exercise.sets.forEach(set => {
+                    if (set.completed) {
+                      // Convert stored weight to display units if using imperial
+                      const displayWeight = unitSystem === 'imperial' ? 
+                        convertToPreferred(set.weight, 'kg') : set.weight;
+                          
+                      completedExerciseSets[set.set_number] = {
+                        weight: displayWeight,
+                        reps: set.reps,
+                        completed: true
+                      };
+                    }
+                  });
+                }
+                initialCompletedSets[exercise.id] = completedExerciseSets;
+              });
+            }
+            setCompletedSets(initialCompletedSets);
           }
         } else {
           // Load existing session
           const response = await sessionsApi.getById(id);
           console.log('Loaded existing session:', response.data);
           
-          // Detailed debugging of API response
-          console.log('API Response Structure:', {
+          // Store the session status in the ref
+          sessionStatusRef.current = response.data.status;
+          
+          // Start a timer only for in-progress sessions
+          if (response.data.status === 'in_progress') {
+            console.log('Starting timer for in-progress session');
+            timerStateRef.current.isRunning = true;
+            timerStateRef.current.interval = setInterval(() => {
+              timerStateRef.current.timer += 1;
+              setWorkoutTimer(timerStateRef.current.timer);
+            }, 1000);
+          } else {
+            console.log('Not starting timer for completed session');
+            timerStateRef.current.isRunning = false;
+          }
+          
+          console.log('Detailed debugging of API response:', {
             session_id: response.data.id,
             exercises_array: Array.isArray(response.data.exercises),
-            exercise_count: response.data.exercises ? response.data.exercises.length : 0
+            exercise_count: response.data.exercises ? response.data.exercises.length : 0,
+            status: response.data.status
           });
           
           // Debug exercise details
@@ -202,16 +339,37 @@ const ActiveWorkout = () => {
             });
           }
           
-          // Convert target weights to display units if using imperial
-          if (response.data.exercises && unitSystem === 'imperial') {
-            response.data.exercises = response.data.exercises.map(exercise => ({
-              ...exercise,
-              // Store original weight in kg for reference
-              original_target_weight: exercise.target_weight,
-              // Convert the displayed target weight to imperial
-              target_weight: exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : exercise.target_weight
-            }));
-            console.log('Converted exercise weights to imperial units:', response.data.exercises);
+          // IMPORTANT FIX: Always convert weights regardless of unit system
+          // Previously only converting when unitSystem === 'imperial' which caused the bug
+          if (response.data.exercises) {
+            response.data.exercises = response.data.exercises.map(exercise => {
+              // Log the exercise and its weight details
+              console.log(`Exercise weight conversion:`, {
+                name: getExerciseProp(exercise, 'name'),
+                original_kg: exercise.target_weight,
+                current_unit_system: unitSystem
+              });
+              
+              // Convert weight from kg (database) to user's preferred unit (component state)
+              let displayWeight = exercise.target_weight || 0;
+              if (exercise.target_weight) {
+                // Always convert from kg (database) to user's preferred unit
+                displayWeight = convertToPreferred(exercise.target_weight, 'kg');
+                console.log(`- Converting weight to user's unit: ${exercise.target_weight} kg → ${displayWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+              }
+
+              return {
+                ...exercise,
+                original_target_weight: exercise.target_weight,
+                target_weight: displayWeight,
+                // Also convert any completed set weights
+                sets: exercise.sets ? exercise.sets.map(set => ({
+                  ...set,
+                  weight: set.weight ? convertToPreferred(set.weight, 'kg') : set.weight
+                })) : exercise.sets
+              };
+            });
+            console.log('Converted exercise weights to user preferred unit:', unitSystem);
           }
           
           setSession(response.data);
@@ -249,146 +407,51 @@ const ActiveWorkout = () => {
       }
     };
 
-    // Only initialize session if we haven't attempted to create one yet
-    if (!sessionCreationAttempted || !isNewSession) {
+    // Only initialize session if ID changed or we haven't attempted to create one yet
+    if (!sessionCreationAttempted || id !== prevIdRef.current) {
+      console.log('Initializing session due to ID change or first load');
+      prevIdRef.current = id;
       setSessionCreationAttempted(true);
+      
+      // Clear any existing timers before initializing
+      clearTimers();
+      
+      // Initialize the session
       initializeSession();
-      
-      // Start workout timer
-      const interval = setInterval(() => {
-        setWorkoutTimer(prev => prev + 1);
-      }, 1000);
-      setTimerInterval(interval);
     }
     
-    // Clean up timer on unmount
+    // Clean up timers on unmount
     return () => {
-      if (timerInterval) {
-        clearInterval(timerInterval);
-      }
+      console.log('Cleaning up on unmount or dependency change');
+      clearTimers();
     };
-  }, [id, planId, isNewSession, timerInterval, sessionCreationAttempted, unitSystem, convertToPreferred]);
+  }, [id, isNewSession, planId, sessionCreationAttempted]);
 
-  // After loading the session and initializing completedSets, add code to pre-populate with default weights
-  useEffect(() => {
-    // Only run this if session is loaded and we're in imperial mode
-    if (session && session.exercises && unitSystem === 'imperial') {
-      // Pre-populate sets with target weights in the correct unit
-      const initializedSets = { ...completedSets };
-      
-      session.exercises.forEach(exercise => {
-        // Check if we already have entries for this exercise
-        if (!initializedSets[exercise.id]) {
-          initializedSets[exercise.id] = {};
-        }
-        
-        // For each set that doesn't have a value yet, initialize with the target weight
-        for (let i = 1; i <= (exercise.sets_count || 1); i++) {
-          if (!initializedSets[exercise.id][i]) {
-            initializedSets[exercise.id][i] = {
-              weight: exercise.target_weight || '',
-              reps: exercise.target_reps || '',
-              completed: false
-            };
-          }
-        }
-      });
-      
-      // Only update state if we've actually added any new values
-      if (JSON.stringify(initializedSets) !== JSON.stringify(completedSets)) {
-        setCompletedSets(initializedSets);
-      }
-    }
-  }, [session, completedSets, unitSystem]);
-
-  // Add this new useEffect to reset the completedSets when the unit system changes
-  useEffect(() => {
-    // When the unit system changes, we need to reset any unsaved sets to force recalculation with new units
-    if (session?.exercises) {
-      console.log("Unit system changed or session loaded - resetting unsaved sets");
-      
-      // Create a fresh set of completed sets
-      const freshSets = { ...completedSets };
-      
-      session.exercises.forEach(exercise => {
-        if (!freshSets[exercise.id]) {
-          freshSets[exercise.id] = {};
-        }
-        
-        // For each set in this exercise
-        for (let i = 1; i <= (exercise.sets_count || 1); i++) {
-          const existingSet = freshSets[exercise.id][i];
-          
-          // Only reset sets that haven't been completed yet
-          if (!existingSet?.completed) {
-            const convertedWeight = unitSystem === 'imperial' && exercise.original_target_weight
-              ? (exercise.original_target_weight * 2.20462).toFixed(1)
-              : exercise.target_weight;
-            
-            freshSets[exercise.id][i] = {
-              weight: convertedWeight,
-              reps: exercise.target_reps || '',
-              completed: false
-            };
-          }
-        }
-      });
-      
-      // Update the state
-      setCompletedSets(freshSets);
-    }
-  }, [unitSystem, session]);
-
-  // Add a useEffect that runs whenever the current exercise changes to ensure we have the right weights
-  useEffect(() => {
-    // Only run if we have a session with exercises and the current exercise index is valid
-    if (session?.exercises && session.exercises[currentExerciseIndex] && unitSystem === 'imperial') {
-      const currentExercise = session.exercises[currentExerciseIndex];
-      console.log("Current exercise changed - checking for any weight conversion needs");
-      
-      // Check if this is the Dumbbell Bench Press with 45.4 kg
-      const isDumbbellBenchPress = getExerciseProp(currentExercise, 'name') === 'Dumbbell Bench Press' && 
-                               (Math.abs(currentExercise.original_target_weight - 45.4) < 0.1 || 
-                                Math.abs(currentExercise.target_weight - 45.4) < 0.1);
-      
-      if (isDumbbellBenchPress) {
-        console.log("Applying direct fix for Dumbbell Bench Press");
-        
-        // Create a copy of the completedSets
-        setCompletedSets(prev => {
-          const updated = { ...prev };
-          
-          // Initialize if needed
-          if (!updated[currentExercise.id]) {
-            updated[currentExercise.id] = {};
-          }
-          
-          // Update each set to use 100 lbs (whole number)
-          for (let i = 1; i <= (currentExercise.sets_count || 1); i++) {
-            if (!updated[currentExercise.id][i] || !updated[currentExercise.id][i].completed) {
-              updated[currentExercise.id][i] = {
-                ...updated[currentExercise.id][i],
-                weight: "100", // Rounded to whole number
-                completed: updated[currentExercise.id][i]?.completed || false
-              };
-            }
-          }
-          
-          return updated;
-        });
-      }
-    }
-  }, [currentExerciseIndex, session, unitSystem]);
-
-  // Format elapsed time for display
+  // Format elapsed time in HH:MM:SS format
   const formatElapsedTime = (seconds) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
-    
-    return `${hours > 0 ? `${hours}h ` : ''}${minutes}m ${secs}s`;
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
-  
+
+  // Format duration between two dates for completed workouts
+  const formatDuration = (startTime, endTime) => {
+    if (!startTime || !endTime) return 'Unknown';
+    
+    const start = new Date(startTime);
+    const end = new Date(endTime);
+    const diffInMinutes = Math.floor((end - start) / 60000);
+    
+    if (diffInMinutes < 60) {
+      return `${diffInMinutes}m`;
+    } else {
+      const hours = Math.floor(diffInMinutes / 60);
+      const minutes = diffInMinutes % 60;
+      return `${hours}h ${minutes}m`;
+    }
+  };
+
   // Add navigation handler for error case
   const handleBackToDashboard = () => {
     navigate('/dashboard');
@@ -418,31 +481,18 @@ const ActiveWorkout = () => {
     setRestInterval(interval);
   };
 
-  // Handle set completion - Modified to directly save the set without requiring editing mode
+  // Handle set completion - Modified to remove special case handling
   const handleCompleteSet = (exerciseId, setNumber, weight, reps, completed = true) => {
-    // Find the exercise to check if it's the special case exercise
+    // Find the exercise
     const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
-    const isDumbbellBenchPress = exercise && 
-                                getExerciseProp(exercise, 'name') === 'Dumbbell Bench Press' && 
-                                (Math.abs(exercise.original_target_weight - 45.4) < 0.1 || 
-                                 Math.abs(exercise.target_weight - 45.4) < 0.1);
     
-    // Allow any value for Dumbbell Bench Press - don't force 100.1 lbs
     // If weight is not provided but we have a target weight in the exercise, use that
     let weightToUse = weight;
     if ((!weightToUse || weightToUse === '') && session?.exercises) {
       if (exercise && exercise.target_weight) {
-        // For Dumbbell Bench Press with ~45.4kg, suggest 100 lbs as the default
-        if (isDumbbellBenchPress && unitSystem === 'imperial') {
-          weightToUse = "100"; // Whole number suggestion
-        } else {
-          // For other exercises, use the target weight (rounded)
-          weightToUse = Math.round(exercise.target_weight).toString();
-        }
+        // Use the target weight (no special case handling)
+        weightToUse = exercise.target_weight.toString();
       }
-    } else if (weightToUse && !isNaN(parseFloat(weightToUse))) {
-      // Round any provided weight to whole numbers
-      weightToUse = Math.round(parseFloat(weightToUse)).toString();
     }
     
     // If reps is not provided but we have target reps in the exercise, use that
@@ -472,61 +522,19 @@ const ActiveWorkout = () => {
     saveSetToBackend(exerciseId, setNumber, weightToUse, repsToUse);
   };
 
-  // Save set data to backend - Modified to handle unit conversion
+  // Save set data to backend - Modified to remove special case handling
   const saveSetToBackend = async (exerciseId, setNumber, weight, reps) => {
     try {
-      // Find the exercise to check if it's the special case exercise
+      // Find the exercise
       const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
-      const isDumbbellBenchPress = exercise && 
-                                  getExerciseProp(exercise, 'name') === 'Dumbbell Bench Press' && 
-                                  (Math.abs(exercise.original_target_weight - 45.4) < 0.1 || 
-                                   Math.abs(exercise.target_weight - 45.4) < 0.1);
-      
-      // If it's the Dumbbell Bench Press and user entered a value, we should convert it properly 
-      // without forcing it to be 45.4 kg (handle any value the user entered)
-      if (isDumbbellBenchPress && unitSystem === 'imperial') {
-        console.log(`Special handling for Dumbbell Bench Press in saveSetToBackend - converting user entered value: ${weight}`);
-        
-        // Convert from imperial to metric for storage
-        let weightToSave = weight === '' ? 0 : Math.round(parseFloat(weight) / 2.20462);
-        
-        // Create workout log with the converted weight
-        const setData = {
-          set_number: setNumber,
-          weight: weightToSave, // Convert to kg and round to whole number
-          reps: reps === '' ? 0 : parseInt(reps, 10),
-          completed: true
-        };
-        
-        console.log(`Saving Dumbbell Bench Press with weight: ${weight} lbs = ${weightToSave} kg`);
-        
-        // Save to backend using the original API method
-        await sessionsApi.addSet(session.id, exerciseId, setData);
-        
-        setSnackbar({
-          open: true,
-          message: 'Set saved successfully',
-          severity: 'success'
-        });
-        
-        // Start rest timer if rest seconds are defined
-        if (exercise && exercise.rest_seconds) {
-          startRestTimer(exercise.rest_seconds);
-        }
-        
-        return;
-      }
       
       // Convert weight to kg for storage if we're in imperial mode
       let weightToSave = weight === '' ? 0 : parseFloat(weight);
       
       if (unitSystem === 'imperial' && weightToSave > 0) {
-        // Convert from imperial to metric for storage and round to whole number
-        weightToSave = Math.round(convertFromPreferred(weightToSave, 'kg'));
+        // Convert from imperial to metric for storage (no rounding)
+        weightToSave = convertFromPreferred(weightToSave, 'kg');
         console.log(`Converting weight from ${weight} lbs to ${weightToSave} kg for storage`);
-      } else {
-        // Round to whole number even in metric units
-        weightToSave = Math.round(weightToSave);
       }
       
       // Ensure we're treating values as numbers, not strings
@@ -606,6 +614,9 @@ const ActiveWorkout = () => {
 
   // Calculate completion percentage
   const calculateCompletion = () => {
+    // If session is completed, return 100%
+    if (session?.status === 'completed') return 100;
+    
     if (!session?.exercises || session.exercises.length === 0) return 0;
     
     let totalSets = 0;
@@ -616,7 +627,9 @@ const ActiveWorkout = () => {
       totalSets += totalExerciseSets;
       
       const exerciseCompletedSets = completedSets[exercise.id] || {};
-      completedSetsCount += Object.keys(exerciseCompletedSets).length;
+      completedSetsCount += Object.values(exerciseCompletedSets)
+        .filter(set => set.completed)
+        .length;
     });
     
     return totalSets > 0 ? (completedSetsCount / totalSets) * 100 : 0;
@@ -680,6 +693,41 @@ const ActiveWorkout = () => {
           exercises: exercisesForToday
         });
         
+        // IMPORTANT FIX: Always convert weights in the newly created session
+        if (sessionResponse.data.exercises) {
+          // Log original data before conversion
+          console.log('New session before weight conversion:', 
+            sessionResponse.data.exercises.map(ex => ({
+              name: getExerciseProp(ex, 'name'),
+              target_weight: ex.target_weight,
+              unit_system: unitSystem
+            }))
+          );
+          
+          // Always convert weights regardless of unit system
+          sessionResponse.data.exercises = sessionResponse.data.exercises.map(exercise => {
+            // Convert weight from kg (database) to user's preferred unit (component state)
+            const convertedWeight = exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : 0;
+            
+            console.log(`Converting weight for ${getExerciseProp(exercise, 'name')}: ${exercise.target_weight} kg → ${convertedWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+            
+            return {
+              ...exercise,
+              original_target_weight: exercise.target_weight, // Keep original kg value
+              target_weight: convertedWeight // Store converted value in user's unit
+            };
+          });
+          
+          console.log('New session after weight conversion:', 
+            sessionResponse.data.exercises.map(ex => ({
+              name: getExerciseProp(ex, 'name'),
+              original_kg: ex.original_target_weight,
+              converted_weight: ex.target_weight,
+              unit_system: unitSystem
+            }))
+          );
+        }
+        
         setSession(sessionResponse.data);
         setCurrentExerciseIndex(0);
         setIsLoading(false);
@@ -704,6 +752,20 @@ const ActiveWorkout = () => {
       return exercise[propName];
     }
     return defaultValue;
+  };
+
+  // Calculate suggested weight for next set
+  const getSuggestedWeight = (exerciseId, setNumber) => {
+    const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
+    
+    // Use completed set weight as suggestion if available
+    if (completedSets[exerciseId]?.[setNumber - 1]?.weight) {
+      return completedSets[exerciseId][setNumber - 1].weight;
+    } 
+    
+    // Otherwise use target weight
+    // Use the already converted target_weight directly (avoid double conversion)
+    return exercise?.target_weight ? exercise.target_weight.toString() : '';
   };
 
   // Render loading state
@@ -890,19 +952,21 @@ const ActiveWorkout = () => {
         <Grid container spacing={2} alignItems="center">
           <Grid item xs={12} md={6}>
             <Typography variant="h5">
-              {session.name || 'Active Workout'}
+              {session.status === 'completed' ? 'Workout Summary' : (session.name || 'Active Workout')}
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
               <TimerIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
               <Typography variant="body2">
-                Elapsed Time: {formatElapsedTime(workoutTimer)}
+                {session.status === 'completed' && session.start_time && session.end_time ? 
+                  `Duration: ${formatDuration(session.start_time, session.end_time)}` : 
+                  `Elapsed Time: ${formatElapsedTime(workoutTimer)}`}
               </Typography>
             </Box>
           </Grid>
           <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
             <Box>
               <Chip
-                label={`Status: ${session.status}`}
+                label={`Status: ${session.status === 'completed' ? 'Completed' : 'In Progress'}`}
                 color={session.status === 'completed' ? 'success' : 'warning'}
                 sx={{ mr: 1 }}
               />
@@ -920,18 +984,32 @@ const ActiveWorkout = () => {
         />
       </Paper>
 
-      {/* Exercise Stepper */}
-      <Stepper 
-        activeStep={currentExerciseIndex} 
-        alternativeLabel 
-        sx={{ mb: 3, display: { xs: 'none', md: 'flex' } }}
-      >
-        {session.exercises.map((exercise, index) => (
-          <Step key={index}>
-            <StepLabel>{exercise.name}</StepLabel>
-          </Step>
-        ))}
-      </Stepper>
+      {/* Exercise Stepper - only show for in-progress workouts */}
+      {session.status !== 'completed' && (
+        <Stepper 
+          activeStep={currentExerciseIndex} 
+          alternativeLabel 
+          sx={{ mb: 3, display: { xs: 'none', md: 'flex' } }}
+        >
+          {session.exercises.map((exercise, index) => (
+            <Step key={index}>
+              <StepLabel>{getExerciseProp(exercise, 'name', 'Exercise')}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+      )}
+
+      {/* Add a back button for completed sessions */}
+      {session.status === 'completed' && (
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={() => navigate('/workout-sessions')}
+          sx={{ mb: 3 }}
+        >
+          Back to Workout History
+        </Button>
+      )}
       
       {/* Current Exercise Card */}
       <Card sx={{ mb: 3 }}>
@@ -1010,7 +1088,9 @@ const ActiveWorkout = () => {
                 <Paper sx={{ p: 2, textAlign: 'center' }}>
                   <Typography variant="subtitle2" color="text.secondary">Weight</Typography>
                   <Typography variant="h5">
-                    {currentExercise.target_weight ? displayWeight(currentExercise.target_weight, unitSystem) : '—'}
+                    {currentExercise.target_weight ? 
+                      displayWeight(currentExercise.target_weight) : 
+                      '—'}
                   </Typography>
                 </Paper>
               </Grid>
@@ -1020,8 +1100,7 @@ const ActiveWorkout = () => {
                   <Typography variant="h5">
                     {completedSets[currentExercise.id] ? 
                       `${Object.keys(completedSets[currentExercise.id]).length}/${exerciseSetsCount}` : 
-                      `0/${exerciseSetsCount}`
-                    }
+                      `0/${exerciseSetsCount}`}
                   </Typography>
                 </Paper>
               </Grid>
@@ -1037,19 +1116,23 @@ const ActiveWorkout = () => {
              currentExercise.name.toLowerCase().includes('press')))
             )
            ) && (
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <FitnessCenterIcon />
-                <Typography variant="h6" gutterBottom>
-                  Plate Calculator
-                </Typography>
-              </Box>
-              
-              {/* Pass the proper target weight value based on unit system */}
-              <PlateCalculator 
-                targetWeight={currentExercise.target_weight} 
-              />
-            </Box>
+            <Grid container>
+              <Grid item xs={12}>
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <FitnessCenterIcon />
+                    <Typography variant="h6" gutterBottom>
+                      Plate Calculator
+                    </Typography>
+                  </Box>
+                  
+                  {/* Pass the proper target weight value based on unit system */}
+                  <PlateCalculator 
+                    targetWeight={parseFloat(currentExercise.target_weight)} 
+                  />
+                </Box>
+              </Grid>
+            </Grid>
           )}
           
           {/* Sets Section */}
@@ -1113,23 +1196,11 @@ const ActiveWorkout = () => {
                           variant="outlined"
                           size="small"
                           margin="dense"
-                          sx={{ width: '70px', mx: 0.5 }}
+                          sx={{ width: '100%' }}
                           // Allow editing regardless of completed status
                           disabled={false} 
                           value={(() => {
                             const exercise = session.exercises.find(e => e.id === currentExercise.id);
-                            
-                            // Special handling for Dumbbell Bench Press with 45.4kg
-                            const isDumbbellBenchPress = 
-                              getExerciseProp(exercise, 'name') === 'Dumbbell Bench Press' && 
-                              (Math.abs(exercise?.original_target_weight - 45.4) < 0.1 || 
-                               Math.abs(exercise?.target_weight - 45.4) < 0.1);
-                            
-                            if (unitSystem === 'imperial' && isDumbbellBenchPress && 
-                                !completedSets[currentExercise.id]?.[setNumber]?.weight) {
-                              console.log(`📏 Suggesting 100 lbs for Dumbbell Bench Press (set ${setNumber})`);
-                              return "100"; // Rounded to whole number
-                            }
                             
                             // Try to get from completedSets first
                             if (completedSets[currentExercise.id]?.[setNumber]?.weight) {
@@ -1161,8 +1232,6 @@ const ActiveWorkout = () => {
                             endAdornment: <Typography color="textSecondary">{unitSystem === 'metric' ? 'kg' : 'lbs'}</Typography>,
                             inputProps: { min: 0 } 
                           }}
-                          size="small"
-                          sx={{ width: '100%' }}
                         />
                       </Grid>
                       <Grid item xs={12} sm={5}>

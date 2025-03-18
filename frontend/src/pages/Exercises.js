@@ -43,7 +43,7 @@ import { useUnitSystem } from '../utils/unitUtils';
 
 const Exercises = () => {
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
+  const { weightUnit, convertToPreferred, convertFromPreferred, displayWeight, unitSystem } = useUnitSystem();
   const [exercises, setExercises] = useState([]);
   const [filteredExercises, setFilteredExercises] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,27 +74,28 @@ const Exercises = () => {
   const fetchExercises = useCallback(async () => {
     try {
       setIsLoading(true);
-      setError(null);
       const response = await exercisesApi.getAll();
       
-      // Convert default weights if needed
-      let exerciseData = response.data;
-      if (weightUnit === 'lb') {
-        exerciseData = exerciseData.map(ex => ({
-          ...ex,
-          default_weight: convertToPreferred(ex.default_weight, 'kg')
-        }));
-      }
+      // Always convert weights regardless of unit system
+      const convertedExercises = response.data.map(ex => ({
+        ...ex,
+        default_weight: ex.default_weight ? convertToPreferred(ex.default_weight, 'kg') : ex.default_weight
+      }));
       
-      setExercises(exerciseData);
-      setFilteredExercises(exerciseData);
+      console.log('Exercises - Converted weights to user preferred unit:', unitSystem);
+      setExercises(convertedExercises);
+      setFilteredExercises(convertedExercises);
     } catch (error) {
       console.error('Error fetching exercises:', error);
-      setError('Failed to load exercises. Please try again later.');
+      setSnackbar({
+        open: true,
+        message: 'Failed to load exercises',
+        severity: 'error'
+      });
     } finally {
       setIsLoading(false);
     }
-  }, [weightUnit, convertToPreferred]);
+  }, [weightUnit, convertToPreferred, unitSystem]);
 
   // Fetch exercises on component mount
   useEffect(() => {
@@ -541,8 +542,7 @@ const Exercises = () => {
             fullWidth
             value={exerciseDialog.data.default_weight || ''}
             onChange={(e) => handleDialogChange({ target: { name: 'default_weight', value: e.target.value } })}
-            margin="normal"
-            InputProps={{ 
+            InputProps={{
               endAdornment: <Typography color="textSecondary">{weightUnit}</Typography>
             }}
           />

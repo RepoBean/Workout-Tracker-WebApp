@@ -54,7 +54,7 @@ export const UnitSystemProvider = ({ children }) => {
   // Get the appropriate weight unit
   const weightUnit = unitSystem === 'metric' ? 'kg' : 'lb';
 
-  // Convert to preferred unit
+  // Convert to preferred unit - MODIFIED to remove rounding during conversion
   const convertToPreferred = (value, sourceUnit) => {
     if (!value) return 0;
     
@@ -64,23 +64,28 @@ export const UnitSystemProvider = ({ children }) => {
     // If values are already in preferred unit, return as-is
     if ((sourceUnit === 'kg' && unitSystem === 'metric') ||
         (sourceUnit === 'lb' && unitSystem === 'imperial')) {
-      return parseFloat(numValue.toFixed(1));
+      console.log(`convertToPreferred: No conversion needed for ${numValue} ${sourceUnit}`);
+      return numValue; // No rounding during conversion
     }
     
     // Convert from kg to lb for imperial
     if (sourceUnit === 'kg' && unitSystem === 'imperial') {
-      return parseFloat((numValue * KG_TO_LB).toFixed(1));
+      const result = numValue * KG_TO_LB; // No rounding during conversion
+      console.log(`convertToPreferred: Converting ${numValue} kg → ${result} lbs`);
+      return result;
     }
     
     // Convert from lb to kg for metric
     if (sourceUnit === 'lb' && unitSystem === 'metric') {
-      return parseFloat((numValue * LB_TO_KG).toFixed(1));
+      const result = numValue * LB_TO_KG; // No rounding during conversion
+      console.log(`convertToPreferred: Converting ${numValue} lbs → ${result} kg`);
+      return result;
     }
     
-    return parseFloat(numValue.toFixed(1));
+    return numValue; // No rounding during conversion
   };
 
-  // Convert from preferred unit to specified unit
+  // Convert from preferred unit to specified unit - MODIFIED to remove rounding during conversion
   const convertFromPreferred = (value, targetUnit) => {
     if (!value) return 0;
     
@@ -90,20 +95,47 @@ export const UnitSystemProvider = ({ children }) => {
     // If already in target unit, return as-is
     if ((unitSystem === 'metric' && targetUnit === 'kg') || 
         (unitSystem === 'imperial' && targetUnit === 'lb')) {
-      return parseFloat(numValue.toFixed(1));
+      console.log(`convertFromPreferred: No conversion needed for ${numValue} ${unitSystem === 'metric' ? 'kg' : 'lb'}`);
+      return numValue; // No rounding during conversion
     }
     
     // Convert from lb to kg
     if (unitSystem === 'imperial' && targetUnit === 'kg') {
-      return parseFloat((numValue * LB_TO_KG).toFixed(1));
+      const result = numValue * LB_TO_KG; // No rounding during conversion
+      console.log(`convertFromPreferred: Converting ${numValue} lbs → ${result} kg`);
+      return result;
     }
     
     // Convert from kg to lb
     if (unitSystem === 'metric' && targetUnit === 'lb') {
-      return parseFloat((numValue * KG_TO_LB).toFixed(1));
+      const result = numValue * KG_TO_LB; // No rounding during conversion
+      console.log(`convertFromPreferred: Converting ${numValue} kg → ${result} lbs`);
+      return result;
     }
     
-    return parseFloat(numValue.toFixed(1));
+    return numValue; // No rounding during conversion
+  };
+
+  // Format weight for display with rounding
+  const formatWeightForDisplay = (weight) => {
+    // Check for invalid values: null, undefined, NaN, Infinity
+    if (weight === null || weight === undefined || isNaN(weight) || !isFinite(weight)) {
+      return '0';
+    }
+    // Convert to number to handle string inputs
+    const numWeight = Number(weight);
+    // Apply rounding only for display purposes
+    return Math.round(numWeight).toString();
+  };
+
+  // New standardized display function for weights
+  const displayWeight = (weight, includeUnit = true) => {
+    if (weight === null || weight === undefined) return '-';
+    
+    const displayValue = formatWeightForDisplay(weight);
+    return includeUnit ? 
+      `${displayValue} ${unitSystem === 'metric' ? 'kg' : 'lbs'}` : 
+      displayValue;
   };
 
   // Calculate plates needed for a barbell 
@@ -154,7 +186,9 @@ export const UnitSystemProvider = ({ children }) => {
     weightUnit,
     convertToPreferred,
     convertFromPreferred,
-    calculatePlates
+    calculatePlates,
+    formatWeightForDisplay,
+    displayWeight // Add the new standardized display function
   };
 
   return (

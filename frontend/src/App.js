@@ -17,6 +17,7 @@ import CreateWorkoutPlan from './pages/CreateWorkoutPlan';
 import EditWorkoutPlan from './pages/EditWorkoutPlan';
 import WorkoutSessions from './pages/WorkoutSessions';
 import ActiveWorkout from './pages/ActiveWorkout';
+import WorkoutSessionDetail from './pages/WorkoutSessionDetail';
 import Exercises from './pages/Exercises';
 import Progress from './pages/Progress';
 import Profile from './pages/Profile';
@@ -103,9 +104,17 @@ function App() {
           </ProtectedRoute>
         } />
         
-        <Route path="/workout-sessions/:id" element={
+        {/* New route for active workouts */}
+        <Route path="/workout-sessions/new" element={
           <ProtectedRoute>
             <ActiveWorkout />
+          </ProtectedRoute>
+        } />
+        
+        {/* Modified route for viewing workout history */}
+        <Route path="/workout-sessions/:id" element={
+          <ProtectedRoute>
+            <WorkoutSessionDetail />
           </ProtectedRoute>
         } />
         

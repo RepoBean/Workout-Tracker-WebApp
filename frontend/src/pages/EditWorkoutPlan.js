@@ -18,7 +18,8 @@ import {
   DialogActions,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  InputAdornment
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -34,10 +35,11 @@ import ExerciseSelector from '../components/workouts/ExerciseSelector';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { useUnitSystem } from '../utils/unitUtils';
+import { parseWeightInput } from '../utils/weightConversion';
 
 const EditWorkoutPlan = () => {
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred, convertFromPreferred } = useUnitSystem();
+  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem, displayWeight } = useUnitSystem();
   const navigate = useNavigate();
   const { id } = useParams();
   
@@ -77,6 +79,17 @@ const EditWorkoutPlan = () => {
         // Format exercises with the properties we need
         if (plan.exercises && plan.exercises.length > 0) {
           const formattedExercises = plan.exercises.map(ex => {
+            // Log the exercise and its weight details
+            console.log(`Loading exercise from API: ${ex.name}`);
+            console.log(`- Original weight from API (kg): ${ex.target_weight}`);
+            
+            // Convert weight from kg (database) to user's preferred unit (component state)
+            let displayWeight = ex.target_weight || 0;
+            if (ex.target_weight) {
+              displayWeight = convertToPreferred(ex.target_weight, 'kg');
+              console.log(`- Converting weight to user's unit: ${ex.target_weight} kg → ${displayWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+            }
+            
             const formattedEx = {
               id: ex.exercise_id || ex.id,
               name: ex.name,
@@ -84,18 +97,11 @@ const EditWorkoutPlan = () => {
               sets: ex.sets || 3,
               reps: ex.reps || 10,
               rest_seconds: ex.rest_seconds || 60,
-              target_weight: weightUnit === 'lb' && ex.target_weight 
-                ? convertToPreferred(ex.target_weight, 'lb') 
-                : (ex.target_weight || 0),
+              target_weight: displayWeight,
               notes: ex.notes || '',
               order: ex.order || 0,
-              plan_exercise_id: ex.id // Keep track of the plan_exercise relationship ID
+              plan_exercise_id: ex.id
             };
-            
-            console.log(`DEBUG - Formatted exercise "${ex.name}":`, {
-              original: ex,
-              formatted: formattedEx
-            });
             
             return formattedEx;
           });
@@ -205,10 +211,20 @@ const EditWorkoutPlan = () => {
   // Update current exercise configuration
   const handleExerciseConfigChange = (field, value) => {
     console.log(`DEBUG - Changing exercise config field "${field}" to:`, value);
+    
+    // Store weight values in the user's preferred unit system in component state
+    // IMPORTANT: No conversion happens here - the raw value from the input is stored
+    // in the user's current unit system (either kg or lbs).
+    // The eventual conversion to kg for database storage happens only at submission time.
     setCurrentExercise(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // Additional debug logging to trace weight values
+    if (field === 'target_weight') {
+      console.log(`DEBUG - Exercise weight set to ${value} ${unitSystem === 'metric' ? 'kg' : 'lbs'} (stored in component state in user's preferred unit)`);
+    }
   };
   
   // Remove an exercise from the plan
@@ -294,20 +310,29 @@ const EditWorkoutPlan = () => {
       
       // 2. Add new exercises
       for (const exToAdd of exercisesToAdd) {
+        // Log weight information for debugging
+        console.log(`Adding exercise: ${exToAdd.name}`);
+        console.log(`- Current unit system: ${unitSystem}`);
+        console.log(`- Raw weight from component state: ${exToAdd.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+        
+        // Convert weight if needed (using parseWeightInput which handles unit conversion)
+        const convertedWeight = parseWeightInput(exToAdd.target_weight, unitSystem);
+        
         const exerciseData = {
           exercise_id: exToAdd.id,
           sets: exToAdd.sets,
           reps: exToAdd.reps,
           rest_seconds: exToAdd.rest_seconds,
-          target_weight: weightUnit === 'lb' 
-            ? convertFromPreferred(parseFloat(exToAdd.target_weight || 0) || 0, 'kg') 
-            : parseFloat(exToAdd.target_weight || 0) || 0,
+          target_weight: convertedWeight, // This is now in kg for storage
           order: exToAdd.order
         };
         
         console.log('DEBUG - Adding exercise with data:', {
           original: exToAdd,
-          formatted: exerciseData
+          formatted: exerciseData,
+          conversion: unitSystem === 'imperial' ? 
+            `Converted ${exToAdd.target_weight} lbs to ${convertedWeight} kg for storage` : 
+            'No conversion needed (already in kg)'
         });
         
         await workoutPlansApi.addExercise(id, exerciseData);
@@ -315,19 +340,28 @@ const EditWorkoutPlan = () => {
       
       // 3. Update existing exercises
       for (const exToUpdate of exercisesToUpdate) {
+        // Log weight information for debugging
+        console.log(`Updating exercise: ${exToUpdate.name || exToUpdate.id}`);
+        console.log(`- Current unit system: ${unitSystem}`);
+        console.log(`- Raw weight from component state: ${exToUpdate.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+        
+        // Convert weight if needed (using parseWeightInput which handles unit conversion)
+        const convertedWeight = parseWeightInput(exToUpdate.target_weight, unitSystem);
+        
         const exerciseData = {
           sets: exToUpdate.sets,
           reps: exToUpdate.reps,
           rest_seconds: exToUpdate.rest_seconds,
-          target_weight: weightUnit === 'lb' 
-            ? convertFromPreferred(parseFloat(exToUpdate.target_weight || 0) || 0, 'kg') 
-            : parseFloat(exToUpdate.target_weight || 0) || 0,
+          target_weight: convertedWeight, // This is now in kg for storage
           order: exToUpdate.order
         };
         
         console.log('DEBUG - Updating exercise with data:', {
           original: exToUpdate,
-          formatted: exerciseData
+          formatted: exerciseData,
+          conversion: unitSystem === 'imperial' ? 
+            `Converted ${exToUpdate.target_weight} lbs to ${convertedWeight} kg for storage` : 
+            'No conversion needed (already in kg)'
         });
         
         await workoutPlansApi.updateExercise(id, exToUpdate.plan_exercise_id, exerciseData);
@@ -640,12 +674,15 @@ const EditWorkoutPlan = () => {
 
               <Grid item xs={12} sm={6}>
                 <TextField
-                  label="Target Weight (lbs/kg)"
+                  label={`Target Weight (${unitSystem === 'metric' ? 'kg' : 'lbs'})`}
                   type="number"
                   fullWidth
                   value={currentExercise.target_weight || 0}
                   onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                  InputProps={{ inputProps: { min: 0, step: 2.5 } }}
+                  InputProps={{ 
+                    inputProps: { min: 0, step: 2.5 },
+                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
+                  }}
                 />
               </Grid>
               

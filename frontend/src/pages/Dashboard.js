@@ -24,10 +24,12 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { workoutPlansApi, sessionsApi, progressApi } from '../utils/api';
+import { useUnitSystem } from '../utils/unitUtils';
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { weightUnit, convertToPreferred, displayWeight } = useUnitSystem();
   
   const [nextWorkout, setNextWorkout] = useState(null);
   const [recentWorkouts, setRecentWorkouts] = useState([]);
@@ -44,6 +46,23 @@ const Dashboard = () => {
       try {
         const response = await workoutPlansApi.getNextWorkout();
         setNextWorkout(response.data);
+        
+        // Add a log to help debug conversion issues
+        if (response.data && response.data.exercises) {
+          console.log('Dashboard - Next workout exercises before conversion:', response.data.exercises);
+          
+          // Ensure weights are converted to user's preferred unit
+          const convertedExercises = response.data.exercises.map(exercise => ({
+            ...exercise,
+            target_weight: exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : exercise.target_weight
+          }));
+          
+          console.log('Dashboard - Next workout exercises after conversion:', convertedExercises);
+          setNextWorkout({
+            ...response.data,
+            exercises: convertedExercises
+          });
+        }
       } catch (error) {
         console.error('Error fetching next workout:', error);
       } finally {
@@ -83,7 +102,7 @@ const Dashboard = () => {
     fetchNextWorkout();
     fetchRecentWorkouts();
     fetchProgressStats();
-  }, []);
+  }, [currentUser, weightUnit, convertToPreferred]);
 
   // Format date to a readable string
   const formatDate = (dateString) => {
@@ -404,7 +423,7 @@ const Dashboard = () => {
                       {progressStats.personalRecords.slice(0, 3).map((record, index) => (
                         <Chip 
                           key={index}
-                          label={`${record.exercise_name}: ${record.weight} kg`}
+                          label={`${record.exercise_name}: ${displayWeight(record.weight)}`}
                           color="primary"
                           variant="outlined"
                         />

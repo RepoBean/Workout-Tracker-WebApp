@@ -65,7 +65,7 @@ import ExerciseSelector from '../components/workouts/ExerciseSelector';
 import { useAuth } from '../contexts/AuthContext';
 import LoadingScreen from '../components/LoadingScreen';
 import { useUnitSystem } from '../utils/unitUtils';
-import { displayWeight, parseWeightInput } from '../utils/weightConversion';
+import { parseWeightInput } from '../utils/weightConversion';
 
 // Define weekdays with their index values (1-7, where 1 is Monday as per ISO standard)
 const WEEKDAYS = [
@@ -78,9 +78,20 @@ const WEEKDAYS = [
   { name: 'Sunday', value: 7 }
 ];
 
+// Helper function to correctly display weights
+// This is a crucial function that ensures weights stored in component state
+// (which are in the user's preferred unit) are properly displayed
+const displayWeightInList = (weight, unitSystem) => {
+  if (!weight) return '';
+  
+  // Since the weight is already in the user's preferred unit in component state,
+  // we don't need to convert, just format it
+  return `${Math.round(weight)} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`;
+};
+
 const CreateWorkoutPlan = () => {
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem } = useUnitSystem();
+  const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem, displayWeight } = useUnitSystem();
   const navigate = useNavigate();
   
   // Form state
@@ -345,10 +356,19 @@ const CreateWorkoutPlan = () => {
   
   // Update current exercise configuration
   const handleExerciseConfigChange = (field, value) => {
+    // Store weight values in the user's preferred unit system in component state
+    // IMPORTANT: No conversion happens here - the raw value from the input is stored
+    // in the user's current unit system (either kg or lbs).
+    // The eventual conversion to kg for database storage happens only at submission time.
     setCurrentExercise(prev => ({
       ...prev,
       [field]: value
     }));
+
+    // Debug logging to trace weight values
+    if (field === 'target_weight') {
+      console.log(`DEBUG - Exercise weight set to ${value} ${unitSystem === 'metric' ? 'kg' : 'lbs'} (stored in component state in user's preferred unit)`);
+    }
   };
   
   // Remove an exercise from the plan
@@ -508,32 +528,51 @@ const CreateWorkoutPlan = () => {
       setError(null);
       
       // Format exercise data for API
-      const exerciseData = exercises.map((exercise, index) => ({
-        exercise_id: exercise.id,
-        sets: exercise.sets,
-        reps: exercise.reps,
-        rest_seconds: exercise.rest_seconds,
-        target_weight: parseFloat(exercise.target_weight || 0) || 0,
-        order: exercise.order || index + 1, // Use existing order if available
-        day_of_week: exercise.day_of_week || null,
-        progression_type: exercise.progression_type || 'weight',
-        progression_value: parseFloat(exercise.progression_value || 2.5) || 2.5,
-        progression_threshold: parseInt(exercise.progression_threshold || 2) || 2
-      }));
+      const exerciseData = exercises.map((exercise, index) => {
+        // Log the exercise being processed
+        console.log(`Processing exercise for API: ${exercise.name}`);
+        console.log(`- Current unit system: ${unitSystem}`);
+        console.log(`- Raw weight from component state: ${exercise.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+        
+        return {
+          exercise_id: exercise.id,
+          sets: exercise.sets,
+          reps: exercise.reps,
+          rest_seconds: exercise.rest_seconds,
+          target_weight: parseFloat(exercise.target_weight || 0) || 0,
+          order: exercise.order || index + 1, // Use existing order if available
+          day_of_week: exercise.day_of_week || null,
+          progression_type: exercise.progression_type || 'weight',
+          progression_value: parseFloat(exercise.progression_value || 2.5) || 2.5,
+          progression_threshold: parseInt(exercise.progression_threshold || 2) || 2
+        };
+      });
       
       // Convert weights to metric for storage if user preference is imperial
       let exercisesWithConvertedWeights = [...exerciseData];
       
       if (weightUnit === 'lb') {
-        // Convert weights to kg for storage
-        exercisesWithConvertedWeights = exercisesWithConvertedWeights.map(exercise => ({
-          ...exercise,
-          target_weight: convertFromPreferred(parseFloat(exercise.target_weight || 0) || 0, 'kg'),
-          // Also convert progression value if the progression is weight-based
-          progression_value: exercise.progression_type === 'weight' 
-            ? convertFromPreferred(parseFloat(exercise.progression_value || 0) || 0, 'kg')
-            : exercise.progression_value
-        }));
+        // Convert weights to kg for storage using parseWeightInput
+        // IMPORTANT: This is where the conversion from lbs → kg happens
+        exercisesWithConvertedWeights = exercisesWithConvertedWeights.map(exercise => {
+          const weightInLbs = exercise.target_weight;
+          const weightInKg = parseWeightInput(weightInLbs, unitSystem);
+          
+          console.log(`Converting weight for '${exercise.exercise_id}': ${weightInLbs} lbs → ${weightInKg} kg`);
+          
+          return {
+            ...exercise,
+            target_weight: weightInKg,
+            // Also convert progression value if the progression is weight-based
+            progression_value: exercise.progression_type === 'weight' 
+              ? parseWeightInput(exercise.progression_value, unitSystem)
+              : exercise.progression_value
+          };
+        });
+        
+        console.log('DEBUG - Weights converted to kg for storage:', exercisesWithConvertedWeights);
+      } else {
+        console.log('DEBUG - No weight conversion needed, unit system is already metric');
       }
       
       const planData = {
@@ -631,14 +670,14 @@ const CreateWorkoutPlan = () => {
               
               <Grid item xs={12} sm={6}>
                 <TextField
-                  label="Target Weight"
+                  label={`Target Weight (${unitSystem === 'metric' ? 'kg' : 'lbs'})`}
                   type="number"
                   fullWidth
-                  value={currentExercise.target_weight}
+                  value={currentExercise.target_weight || 0}
                   onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
                   InputProps={{ 
-                    inputProps: { min: 0, step: 0.5 },
-                    endAdornment: <InputAdornment position="end">{unitSystem === 'metric' ? 'kg' : 'lbs'}</InputAdornment>
+                    inputProps: { min: 0, step: 2.5 },
+                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
                   }}
                 />
               </Grid>
@@ -836,8 +875,8 @@ const CreateWorkoutPlan = () => {
               value={batchConfigValues.target_weight}
               onChange={(e) => handleBatchConfigValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
               InputProps={{ 
-                inputProps: { min: 0, step: 0.5 },
-                endAdornment: <InputAdornment position="end">{unitSystem === 'metric' ? 'kg' : 'lbs'}</InputAdornment>
+                inputProps: { min: 0, step: 2.5 },
+                endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
               }}
               disabled={!batchConfigFields.target_weight}
             />

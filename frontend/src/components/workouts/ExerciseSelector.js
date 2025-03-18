@@ -63,7 +63,7 @@ const WEEKDAYS = [
  * Component for selecting exercises for workout plans
  */
 const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], selectedDays = [], currentAddDay = null }) => {
-  const { weightUnit } = useUnitSystem();
+  const { weightUnit, displayWeight } = useUnitSystem();
   const [exercises, setExercises] = useState([]);
   const [filteredExercises, setFilteredExercises] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -512,10 +512,10 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
                       label="Target Weight"
                       type="number"
                       fullWidth
-                      value={defaultValues.target_weight}
+                      value={defaultValues.target_weight || 0}
                       onChange={(e) => handleDefaultValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                      InputProps={{ 
-                        inputProps: { min: 0, step: 0.5 },
+                      InputProps={{
+                        inputProps: { min: 0, step: 2.5 },
                         endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
                       }}
                     />
@@ -607,14 +607,7 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
                         />
                       </TableCell>
                       <TableCell align="center">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={exercise.target_weight}
-                          onChange={(e) => handleUpdateExercise(index, 'target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                          InputProps={{ inputProps: { min: 0, step: 0.5, style: { textAlign: 'center' } } }}
-                          sx={{ width: '70px' }}
-                        />
+                        {displayWeight(exercise.target_weight)}
                       </TableCell>
                       <TableCell align="center">
                         <FormControl size="small" sx={{ minWidth: 120 }}>

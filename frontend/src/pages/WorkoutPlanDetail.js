@@ -40,7 +40,7 @@ import {
 import { workoutPlansApi, handleApiError } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useUnitSystem } from '../utils/unitUtils';
-import { displayWeight } from '../utils/weightConversion';
+import { useAuth } from '../contexts/AuthContext';
 
 // Weekday names mapping
 const WEEKDAYS = [
@@ -56,7 +56,8 @@ const WEEKDAYS = [
 const WorkoutPlanDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { weightUnit, convertToPreferred, unitSystem } = useUnitSystem();
+  const { weightUnit, convertToPreferred, unitSystem, displayWeight } = useUnitSystem();
+  const { currentUser } = useAuth();
   
   const [plan, setPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,7 +73,23 @@ const WorkoutPlanDetail = () => {
         setIsLoading(true);
         setError(null);
         const response = await workoutPlansApi.getById(id);
-        setPlan(response.data);
+        
+        // Process plan data and convert weights from kg to user's preferred unit
+        if (response.data && response.data.exercises) {
+          const processedExercises = response.data.exercises.map(exercise => ({
+            ...exercise,
+            target_weight: exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : exercise.target_weight
+          }));
+          
+          setPlan({
+            ...response.data,
+            exercises: processedExercises
+          });
+          
+          console.log('Converted workout plan weights to user preferred unit:', unitSystem);
+        } else {
+          setPlan(response.data);
+        }
         
         // If there are exercises, expand the first day by default
         if (response.data.exercises && response.data.exercises.length > 0) {
@@ -95,7 +112,7 @@ const WorkoutPlanDetail = () => {
     if (id) {
       fetchPlanDetails();
     }
-  }, [id]);
+  }, [id, unitSystem, convertToPreferred, weightUnit]);
   
   // Format creation date
   const formatDate = (dateString) => {
@@ -437,9 +454,9 @@ const WorkoutPlanDetail = () => {
                               {exercise.rest_seconds ? `${exercise.rest_seconds}s` : '60s'}
                             </TableCell>
                             <TableCell align="center">
-                              {exercise.target_weight > 0 
-                                ? displayWeight(exercise.target_weight, unitSystem)
-                                : '-'}
+                              {exercise.target_weight > 0
+                                ? displayWeight(exercise.target_weight)
+                                : '—'}
                             </TableCell>
                           </TableRow>
                         ))}

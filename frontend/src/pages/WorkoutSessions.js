@@ -39,7 +39,7 @@ import { useUnitSystem } from '../utils/unitUtils';
 const WorkoutSessions = () => {
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const { weightUnit, convertToPreferred } = useUnitSystem();
+  const { weightUnit, convertToPreferred, unitSystem, displayWeight } = useUnitSystem();
   const [sessions, setSessions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [tabValue, setTabValue] = useState(0);
@@ -61,23 +61,24 @@ const WorkoutSessions = () => {
       }
       
       const response = await sessionsApi.getAll(params);
-      let sessions = response.data;
       
-      // Convert weights if needed
-      if (weightUnit === 'lb') {
-        sessions = sessions.map(session => ({
-          ...session,
-          total_weight: convertToPreferred(session.total_weight, 'kg')
-        }));
-      }
+      // Log the original response for debugging
+      console.log('WorkoutSessions - Original data from API:', response.data);
       
-      setSessions(sessions);
+      // Always convert weights regardless of unit system
+      const convertedSessions = response.data.map(session => ({
+        ...session,
+        total_weight: session.total_weight ? convertToPreferred(session.total_weight, 'kg') : 0
+      }));
+      
+      console.log('WorkoutSessions - Converted weights to user preferred unit:', unitSystem);
+      setSessions(convertedSessions);
     } catch (error) {
       console.error('Error fetching workout sessions:', error);
     } finally {
       setIsLoading(false);
     }
-  }, [tabValue, weightUnit, convertToPreferred]);
+  }, [tabValue, unitSystem, convertToPreferred]);
   
   useEffect(() => {
     fetchWorkoutSessions();
@@ -210,6 +211,7 @@ const WorkoutSessions = () => {
                   <TableCell>Workout</TableCell>
                   <TableCell>Exercises</TableCell>
                   <TableCell>Duration</TableCell>
+                  <TableCell>Total Weight</TableCell>
                   <TableCell>Status</TableCell>
                   <TableCell align="right">Actions</TableCell>
                 </TableRow>
@@ -239,6 +241,9 @@ const WorkoutSessions = () => {
                         <TimerIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
                         {formatDuration(session.start_time, session.end_time)}
                       </Box>
+                    </TableCell>
+                    <TableCell>
+                      {session.total_weight ? displayWeight(session.total_weight) : '—'}
                     </TableCell>
                     <TableCell>
                       <Chip 
