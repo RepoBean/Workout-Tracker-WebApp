@@ -348,6 +348,50 @@ async def delete_workout_session(
     
     return None
 
+@router.get("/plan/{plan_id}", response_model=List[WorkoutSessionResponse])
+async def get_sessions_by_plan(
+    plan_id: int,
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all workout sessions for a specific workout plan,
+    optionally filtered by status
+    """
+    # Check if plan exists and user has access
+    workout_plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id).first()
+    if not workout_plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workout plan not found"
+        )
+    
+    # Check access permissions
+    if workout_plan.owner_id != current_user.id and not workout_plan.is_public:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access this workout plan"
+        )
+    
+    # Use joinedload to efficiently load related Exercise objects
+    query = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+    ).filter(
+        WorkoutSession.user_id == current_user.id,
+        WorkoutSession.workout_plan_id == plan_id
+    )
+    
+    # Apply status filter if provided
+    if status:
+        query = query.filter(WorkoutSession.status == status)
+    
+    # Order by start time (newest first)
+    query = query.order_by(desc(WorkoutSession.start_time))
+    
+    sessions = query.all()
+    return sessions
+
 # Session Exercise Management
 
 @router.post("/{session_id}/exercises", response_model=SessionExerciseResponse)

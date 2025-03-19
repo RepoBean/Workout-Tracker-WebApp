@@ -100,6 +100,11 @@ export const sessionsApi = {
     api.put(`/api/sessions/${sessionId}/exercises/${exerciseId}/sets/${setId}`, setData),
   deleteSet: (sessionId, exerciseId, setId) => 
     api.delete(`/api/sessions/${sessionId}/exercises/${exerciseId}/sets/${setId}`),
+  getByPlan: (planId, status) => {
+    let url = `/api/sessions/plan/${planId}`;
+    if (status) url += `?status=${status}`;
+    return api.get(url);
+  },
 };
 
 // Exercises API

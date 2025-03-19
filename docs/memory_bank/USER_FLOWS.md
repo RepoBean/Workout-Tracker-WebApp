@@ -87,6 +87,16 @@
 7. User adds optional session notes and rating
 8. System saves the complete workout session
 
+### Sequential Workout Progression Flow
+1. User starts a workout with an active plan
+2. System determines the next workout day based on user's progress:
+   - If no completed sessions, system presents the first day of the plan
+   - If user has completed previous workouts, system presents the next day in sequence
+   - If user has completed the final day, system loops back to the first day
+3. System shows exercises for the determined workout day regardless of the current calendar day
+4. User completes the workout as usual
+5. On next workout, system advances to the next sequential day in the plan
+
 ### Rest Timer Flow
 1. User completes a set of an exercise
 2. System automatically starts rest timer (default: 60 seconds)

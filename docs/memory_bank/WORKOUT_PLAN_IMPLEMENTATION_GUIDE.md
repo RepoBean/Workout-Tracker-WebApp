@@ -45,6 +45,35 @@ The active workout plan functionality should:
 4. Display the active plan on the dashboard as "Next Workout"
 5. Retrieve active plan via `/api/plans/next` endpoint
 
+### Sequential Workout Progression Logic
+
+The sequential workout progression functionality should:
+
+1. Determine the next workout day based on user's progress through the program
+2. Present exercises for the determined day regardless of current calendar day
+3. Track completed workout days to ensure proper progression
+
+Key components involved:
+
+1. **Backend API**:
+   - `GET /api/sessions/plan/{plan_id}` endpoint for retrieving a user's sessions for a specific plan
+   - Filter capability for completed sessions
+
+2. **Frontend Logic**:
+   - `determineNextWorkoutDay()` function that:
+     - Takes an array of workout days from the plan and completed sessions
+     - Returns the next logical workout day based on the most recent completed day
+     - Loops back to the first day after completing the last day
+
+3. **Session Creation**:
+   - Modified to use the determined next workout day instead of the current calendar day
+   - Handles both active plans and specifically selected plans consistently
+
+This implementation allows users to:
+- Progress through their workout program in the intended sequence
+- Start workouts on any day of the week without disrupting the program
+- Resume their program at the correct point after missing scheduled workouts
+
 ### Common Issues to Watch For
 
 1. Field naming inconsistencies between frontend and backend (e.g., `rest_time` vs `rest_seconds`)

@@ -101,6 +101,33 @@ const ActiveWorkout = () => {
   const [isResting, setIsResting] = useState(false);
   const [restInterval, setRestInterval] = useState(null);
 
+  // Helper function to determine the next workout day - moved outside useEffect
+  const determineNextWorkoutDay = (planDays, completedSessions) => {
+    // If no completed sessions, return the first day in the program
+    if (!completedSessions || completedSessions.length === 0) {
+      return planDays[0];
+    }
+    
+    // Sort sessions by end time (newest first)
+    const sortedSessions = [...completedSessions].sort(
+      (a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time)
+    );
+    
+    // Get the most recent completed day
+    const lastCompletedDay = sortedSessions[0].day_of_week;
+    
+    // Find that day's position in the plan
+    const lastDayIndex = planDays.indexOf(lastCompletedDay);
+    
+    // If day not found or it was the last day in the program, circle back to day 1
+    if (lastDayIndex === -1 || lastDayIndex === planDays.length - 1) {
+      return planDays[0];
+    }
+    
+    // Otherwise return the next day in the program sequence
+    return planDays[lastDayIndex + 1];
+  };
+
   // Load session data or create new session
   useEffect(() => {
     // Define a function to clear any existing timers
@@ -140,10 +167,34 @@ const ActiveWorkout = () => {
                 console.log('Found active plan:', activePlanResponse.data);
                 const activePlan = activePlanResponse.data;
                 
-                // Create a session using the active plan and today's day
+                // Get all unique workout days from the plan
+                const planDays = [...new Set(activePlan.exercises
+                  .map(ex => ex.day_of_week))].sort();
+                
+                if (planDays.length === 0) {
+                  console.error('Active plan has no exercises assigned to days');
+                  setSnackbar({
+                    open: true,
+                    message: 'Active plan has no exercises assigned to days',
+                    severity: 'error'
+                  });
+                  setIsLoading(false);
+                  return;
+                }
+                
+                // Get completed sessions for this plan to determine progress
+                const sessionsResponse = await sessionsApi.getByPlan(activePlan.id, 'completed');
+                const completedSessions = sessionsResponse.data;
+                
+                // Determine next workout day based on completed sessions
+                const nextWorkoutDay = determineNextWorkoutDay(planDays, completedSessions);
+                
+                console.log(`Next workout day in program: Day ${nextWorkoutDay}`);
+                
+                // Create a session using the next workout day instead of today's calendar day
                 const response = await sessionsApi.create({
                   workout_plan_id: activePlan.id,
-                  day_of_week: todayDbFormat,
+                  day_of_week: nextWorkoutDay,
                   status: 'in_progress',
                   start_time: new Date().toISOString()
                 });
@@ -214,83 +265,106 @@ const ActiveWorkout = () => {
             }
           } else {
             // Create a session from the specified plan
-            const response = await sessionsApi.create({
-              workout_plan_id: planId,
-              day_of_week: todayDbFormat,
-              status: 'in_progress',
-              start_time: new Date().toISOString()
-            });
+            try {
+              // Get plan details first to determine the next workout day
+              const planResponse = await workoutPlansApi.getById(planId);
+              const plan = planResponse.data;
+              
+              // Get all unique workout days from the plan
+              const planDays = [...new Set(plan.exercises
+                .map(ex => ex.day_of_week))].sort();
+              
+              // Get completed sessions for this plan
+              const sessionsResponse = await sessionsApi.getByPlan(plan.id, 'completed');
+              const completedSessions = sessionsResponse.data;
+              
+              // Determine next workout day based on completed sessions
+              const nextWorkoutDay = determineNextWorkoutDay(planDays, completedSessions);
+              
+              console.log(`Next workout day in program: Day ${nextWorkoutDay}`);
+              
+              const response = await sessionsApi.create({
+                workout_plan_id: planId,
+                day_of_week: nextWorkoutDay,
+                status: 'in_progress',
+                start_time: new Date().toISOString()
+              });
             
-            // If no exercises were returned, we need to handle the "no exercises for today" case
-            if (!response.data.exercises || response.data.exercises.length === 0) {
+              // If no exercises were returned, we need to handle the "no exercises for today" case
+              if (!response.data.exercises || response.data.exercises.length === 0) {
+                setIsLoading(false);
+                setNoExercisesForToday(true);
+                return;
+              }
+              
+              // Sort exercises by their order field before processing further
+              response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+              
+              // IMPORTANT FIX: Always convert weights in the newly created session
+              if (response.data.exercises && response.data.exercises.length > 0) {
+                console.log('New session before weight conversion (from active plan):', 
+                  response.data.exercises.map(ex => ({
+                    name: getExerciseProp(ex, 'name'),
+                    target_weight: ex.target_weight,
+                    unit_system: unitSystem
+                  }))
+                );
+                
+                // Always convert weights regardless of unit system
+                response.data.exercises = response.data.exercises.map(exercise => {
+                  // Convert weight from kg (database) to user's preferred unit (component state)
+                  const convertedWeight = exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : 0;
+                  
+                  console.log(`Converting weight for ${getExerciseProp(exercise, 'name')}: ${exercise.target_weight} kg → ${convertedWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+                  
+                  return {
+                    ...exercise,
+                    original_target_weight: exercise.target_weight, // Keep original kg value
+                    target_weight: convertedWeight // Store converted value in user's unit
+                  };
+                });
+                
+                console.log('After weight conversion (from active plan):', 
+                  response.data.exercises.map(ex => ({
+                    name: getExerciseProp(ex, 'name'),
+                    original_kg: ex.original_target_weight,
+                    converted_weight: ex.target_weight,
+                    unit_system: unitSystem
+                  }))
+                );
+              }
+              
+              setSession(response.data);
+              
+              // Initialize completed sets data structure
+              const initialCompletedSets = {};
+              if (response.data.exercises) {
+                response.data.exercises.forEach(exercise => {
+                  const completedExerciseSets = {};
+                  if (exercise.sets) {
+                    exercise.sets.forEach(set => {
+                      if (set.completed) {
+                        // Convert stored weight to display units if using imperial
+                        const displayWeight = unitSystem === 'imperial' ? 
+                          convertToPreferred(set.weight, 'kg') : set.weight;
+                            
+                        completedExerciseSets[set.set_number] = {
+                          weight: displayWeight,
+                          reps: set.reps,
+                          completed: true
+                        };
+                      }
+                    });
+                  }
+                  initialCompletedSets[exercise.id] = completedExerciseSets;
+                });
+              }
+              setCompletedSets(initialCompletedSets);
+            } catch (error) {
+              console.error('Error creating session:', error);
+              setError('Failed to create workout session');
               setIsLoading(false);
-              setNoExercisesForToday(true);
-              return;
             }
-            
-            // Sort exercises by their order field before processing further
-            response.data.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
-            
-            // IMPORTANT FIX: Always convert weights in the newly created session
-            if (response.data.exercises && response.data.exercises.length > 0) {
-              console.log('New session before weight conversion (from active plan):', 
-                response.data.exercises.map(ex => ({
-                  name: getExerciseProp(ex, 'name'),
-                  target_weight: ex.target_weight,
-                  unit_system: unitSystem
-                }))
-              );
-              
-              // Always convert weights regardless of unit system
-              response.data.exercises = response.data.exercises.map(exercise => {
-                // Convert weight from kg (database) to user's preferred unit (component state)
-                const convertedWeight = exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : 0;
-                
-                console.log(`Converting weight for ${getExerciseProp(exercise, 'name')}: ${exercise.target_weight} kg → ${convertedWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
-                
-                return {
-                  ...exercise,
-                  original_target_weight: exercise.target_weight, // Keep original kg value
-                  target_weight: convertedWeight // Store converted value in user's unit
-                };
-              });
-              
-              console.log('After weight conversion (from active plan):', 
-                response.data.exercises.map(ex => ({
-                  name: getExerciseProp(ex, 'name'),
-                  original_kg: ex.original_target_weight,
-                  converted_weight: ex.target_weight,
-                  unit_system: unitSystem
-                }))
-              );
-            }
-            
-            setSession(response.data);
-            
-            // Initialize completed sets data structure
-            const initialCompletedSets = {};
-            if (response.data.exercises) {
-              response.data.exercises.forEach(exercise => {
-                const completedExerciseSets = {};
-                if (exercise.sets) {
-                  exercise.sets.forEach(set => {
-                    if (set.completed) {
-                      // Convert stored weight to display units if using imperial
-                      const displayWeight = unitSystem === 'imperial' ? 
-                        convertToPreferred(set.weight, 'kg') : set.weight;
-                          
-                      completedExerciseSets[set.set_number] = {
-                        weight: displayWeight,
-                        reps: set.reps,
-                        completed: true
-                      };
-                    }
-                  });
-                }
-                initialCompletedSets[exercise.id] = completedExerciseSets;
-              });
-            }
-            setCompletedSets(initialCompletedSets);
           }
         } else {
           // Load existing session
@@ -635,7 +709,7 @@ const ActiveWorkout = () => {
     return totalSets > 0 ? (completedSetsCount / totalSets) * 100 : 0;
   };
 
-  // Update the fetchActiveWorkoutPlan function to handle days without exercises
+  // Update the fetchActiveWorkoutPlan function to handle sequential workout progression
   const fetchActiveWorkoutPlan = async () => {
     try {
       const response = await workoutPlansApi.getActive();
@@ -645,52 +719,71 @@ const ActiveWorkout = () => {
         throw new Error('No active workout plan found');
       }
       
-      // Get current day of week (1-7, where 1 is Monday as per ISO standard)
-      const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
-      // Convert JS day (0-6, Sun-Sat) to our db format (1-7, Mon-Sun)
-      const todayDbFormat = today === 0 ? 7 : today; // Convert Sunday from 0 to 7
+      // Get all unique days in the plan
+      const planDays = [...new Set(plan.exercises
+        .map(ex => ex.day_of_week))].sort();
+      
+      if (planDays.length === 0) {
+        console.error('Active plan has no exercises assigned to days');
+        setSnackbar({
+          open: true,
+          message: 'Active plan has no exercises assigned to days',
+          severity: 'error'
+        });
+        setIsLoading(false);
+        return;
+      }
       
       console.log('Active plan:', plan);
-      console.log('Today day of week:', todayDbFormat);
+      console.log('Plan workout days:', planDays);
       
-      // Filter exercises for today based on day_of_week property
-      let exercisesForToday = [];
+      // Get completed sessions for this plan
+      const sessionsResponse = await sessionsApi.getByPlan(plan.id, 'completed');
+      const completedSessions = sessionsResponse.data;
+      
+      // Determine next workout day based on completed sessions
+      const nextWorkoutDay = determineNextWorkoutDay(planDays, completedSessions);
+      
+      console.log('Next workout day:', nextWorkoutDay);
+      
+      // Filter exercises for the next workout day
+      let exercisesForNextDay = [];
       
       if (plan.exercises && plan.exercises.length > 0) {
-        // Filter exercises assigned to today
-        exercisesForToday = plan.exercises
-          .filter(ex => ex.day_of_week === todayDbFormat)
+        // Filter exercises assigned to the next day
+        exercisesForNextDay = plan.exercises
+          .filter(ex => ex.day_of_week === nextWorkoutDay)
           .map(ex => ({
             exercise_id: ex.exercise_id,
             sets_completed: 0,
             order: ex.order || 1
           }));
           
-        console.log('Exercises for today:', exercisesForToday);
+        console.log('Exercises for next workout day:', exercisesForNextDay);
       }
       
-      // If no exercises for today, show a message
-      if (exercisesForToday.length === 0) {
+      // If no exercises for the next day, show a message
+      if (exercisesForNextDay.length === 0) {
         setIsLoading(false);
         setNoExercisesForToday(true);
         
         setSnackbar({
           open: true,
-          message: 'No exercises scheduled for today in your active plan.',
+          message: 'No exercises found for your next workout day.',
           severity: 'info'
         });
         
         return;
       }
       
-      // Create a workout session with the exercises for today
+      // Create a workout session with the exercises for the next workout day
       try {
-        console.log('Creating session with exercises:', exercisesForToday);
+        console.log('Creating session with exercises:', exercisesForNextDay);
         
         const sessionResponse = await sessionsApi.create({
           workout_plan_id: plan.id,
-          day_of_week: todayDbFormat,
-          exercises: exercisesForToday
+          day_of_week: nextWorkoutDay,
+          exercises: exercisesForNextDay
         });
         
         // IMPORTANT FIX: Always convert weights in the newly created session
