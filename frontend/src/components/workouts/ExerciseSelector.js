@@ -75,18 +75,7 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Configuration step state
-  const [activeStep, setActiveStep] = useState(0);
   const [configuredExercises, setConfiguredExercises] = useState([]);
-  
-  // Default values for batch configuration
-  const [defaultValues, setDefaultValues] = useState({
-    sets: 3,
-    reps: 10,
-    rest_seconds: 60,
-    target_weight: 0,
-    day_of_week: selectedDays.length > 0 ? selectedDays[0] : null
-  });
 
   // Initialize component
   useEffect(() => {
@@ -94,7 +83,6 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
       // Don't pre-select exercises when adding to days
       // This allows the same exercise to be added to multiple days
       setSelectedExercises([]);
-      setActiveStep(0);
       fetchExercises();
     }
   }, [open]);
@@ -191,17 +179,17 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
     setSelectedMuscleGroup('');
   };
 
-  // Handle moving to configuration step
+  // Simplified handleMoveToConfig that directly creates individually configurable exercises
   const handleMoveToConfig = () => {
-    // Create configured exercises based on selected IDs
+    // Create configured exercises based on selected IDs with sensible defaults
     const selectedExerciseObjects = exercises
       .filter(ex => selectedExercises.includes(ex.id))
       .map(ex => ({
         ...ex,
-        sets: defaultValues.sets,
-        reps: defaultValues.reps,
-        rest_seconds: defaultValues.rest_seconds,
-        target_weight: defaultValues.target_weight,
+        sets: 3,
+        reps: 10,
+        rest_seconds: 60,
+        target_weight: 0,
         // Always use currentAddDay to ensure exercises are properly assigned to the selected day
         day_of_week: currentAddDay,
         progression_type: 'weight',
@@ -210,33 +198,11 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
       }));
     
     setConfiguredExercises(selectedExerciseObjects);
-    setActiveStep(1);
+    onSelect(selectedExerciseObjects);
+    onClose();
   };
 
-  // Handle going back to selection step
-  const handleBackToSelection = () => {
-    setActiveStep(0);
-  };
-
-  // Update default values for batch configuration
-  const handleDefaultValueChange = (field, value) => {
-    setDefaultValues(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
-  // Apply default values to all configured exercises
-  const handleApplyToAll = (field) => {
-    setConfiguredExercises(prev => 
-      prev.map(ex => ({
-        ...ex,
-        [field]: defaultValues[field]
-      }))
-    );
-  };
-
-  // Update a single configured exercise
+  // Update a single configured exercise - keep this for reference
   const handleUpdateExercise = (index, field, value) => {
     const updatedExercises = [...configuredExercises];
     updatedExercises[index] = {
@@ -244,22 +210,6 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
       [field]: value
     };
     setConfiguredExercises(updatedExercises);
-    
-    // If day_of_week is being changed, clear the selection for this exercise
-    if (field === 'day_of_week') {
-      setSelectedExercises(prev => {
-        // If we're unselecting, don't change anything
-        if (value === null) return prev;
-        // Clear selection when moving exercise to a specific day
-        return prev.filter(id => id !== updatedExercises[index].id);
-      });
-    }
-  };
-
-  // Handle selection confirmation
-  const handleConfirm = () => {
-    onSelect(configuredExercises);
-    onClose();
   };
 
   // Render weekday options as menu items
@@ -292,20 +242,9 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
       aria-labelledby="exercise-selector-dialog"
     >
       <DialogTitle id="exercise-selector-dialog" sx={{ pb: 1 }}>
-        {activeStep === 0 ? 'Select Exercises' : 'Configure Exercises'}
+        Select Exercises
       </DialogTitle>
 
-      <Box sx={{ width: '100%', px: 3 }}>
-        <Stepper activeStep={activeStep} alternativeLabel>
-          <Step>
-            <StepLabel>Select Exercises</StepLabel>
-          </Step>
-          <Step>
-            <StepLabel>Configure Sets, Reps & Weight</StepLabel>
-          </Step>
-        </Stepper>
-      </Box>
-      
       <DialogContent dividers>
         {error && (
           <Alert severity="error" sx={{ mb: 2 }}>
@@ -313,354 +252,145 @@ const ExerciseSelector = ({ open, onClose, onSelect, selectedExerciseIds = [], s
           </Alert>
         )}
         
-        {activeStep === 0 ? (
-          // STEP 1: Exercise Selection
-          <>
-            <Box sx={{ mb: 3 }}>
-              <Grid container spacing={2}>
-                {/* Search input */}
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    placeholder="Search exercises..."
-                    value={searchTerm}
-                    onChange={handleSearchChange}
-                    InputProps={{
-                      startAdornment: (
-                        <InputAdornment position="start">
-                          <SearchIcon />
-                        </InputAdornment>
-                      ),
-                      endAdornment: searchTerm && (
-                        <InputAdornment position="end">
-                          <IconButton onClick={handleClearSearch} edge="end" size="small">
-                            <ClearIcon />
-                          </IconButton>
-                        </InputAdornment>
-                      )
-                    }}
-                  />
-                </Grid>
-                
-                {/* Category filter */}
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel id="category-select-label">Category</InputLabel>
-                    <Select
-                      labelId="category-select-label"
-                      value={selectedCategory}
-                      label="Category"
-                      onChange={handleCategoryChange}
-                    >
-                      <MenuItem value="">All Categories</MenuItem>
-                      {categories.map((category) => (
-                        <MenuItem key={category} value={category}>
-                          {category}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-                
-                {/* Muscle group filter */}
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel id="muscle-group-select-label">Muscle Group</InputLabel>
-                    <Select
-                      labelId="muscle-group-select-label"
-                      value={selectedMuscleGroup}
-                      label="Muscle Group"
-                      onChange={handleMuscleGroupChange}
-                    >
-                      <MenuItem value="">All Muscle Groups</MenuItem>
-                      {muscleGroups.map((group) => (
-                        <MenuItem key={group} value={group}>
-                          {group}
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-              
-              {/* Filter controls and stats */}
-              <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Button 
-                  size="small" 
-                  onClick={handleResetFilters}
+        <Box sx={{ mb: 3 }}>
+          <Grid container spacing={2}>
+            {/* Search input */}
+            <Grid item xs={12}>
+              <TextField
+                fullWidth
+                placeholder="Search exercises..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <SearchIcon />
+                    </InputAdornment>
+                  ),
+                  endAdornment: searchTerm && (
+                    <InputAdornment position="end">
+                      <IconButton onClick={handleClearSearch} edge="end" size="small">
+                        <ClearIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  )
+                }}
+              />
+            </Grid>
+            
+            {/* Category filter */}
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel id="category-select-label">Category</InputLabel>
+                <Select
+                  labelId="category-select-label"
+                  value={selectedCategory}
+                  label="Category"
+                  onChange={handleCategoryChange}
                 >
-                  Reset Filters
-                </Button>
-                <Typography variant="body2" color="text.secondary">
-                  {selectedExercises.length} selected / {filteredExercises.length} shown
-                </Typography>
-              </Box>
-            </Box>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            {/* Exercise list */}
-            {loading ? (
-              <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
-                <CircularProgress />
-              </Box>
-            ) : filteredExercises.length === 0 ? (
-              <Typography align="center" color="text.secondary" sx={{ py: 4 }}>
-                No exercises found. Try adjusting your filters.
-              </Typography>
-            ) : (
-              <List sx={{ maxHeight: '400px', overflow: 'auto' }}>
-                {filteredExercises.map((exercise) => (
-                  <ListItem key={exercise.id} divider>
-                    <ListItemIcon>
-                      <FitnessCenterIcon />
-                    </ListItemIcon>
-                    <ListItemText
-                      primary={exercise.name}
-                      secondary={
-                        <>
-                          {exercise.muscle_group && (
-                            <Typography component="span" variant="body2" color="text.secondary">
-                              {exercise.muscle_group}
-                            </Typography>
-                          )}
-                          {exercise.category && (
-                            <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
-                              • {exercise.category}
-                            </Typography>
-                          )}
-                        </>
-                      }
-                    />
-                    <ListItemSecondaryAction>
-                      <Checkbox
-                        edge="end"
-                        onChange={() => handleToggleExercise(exercise.id)}
-                        checked={selectedExercises.includes(exercise.id)}
-                      />
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                ))}
-              </List>
-            )}
-          </>
-        ) : (
-          // STEP 2: Exercise Configuration
-          <>
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom>
-                Default Values (For All Exercises)
-              </Typography>
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="Sets"
-                      type="number"
-                      fullWidth
-                      value={defaultValues.sets}
-                      onChange={(e) => handleDefaultValueChange('sets', Math.max(1, parseInt(e.target.value) || 1))}
-                      InputProps={{ inputProps: { min: 1 } }}
-                    />
-                    <Button 
-                      size="small" 
-                      onClick={() => handleApplyToAll('sets')}
-                      sx={{ mt: 1 }}
-                    >
-                      Apply to All
-                    </Button>
-                  </Grid>
-                  
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="Reps"
-                      type="number"
-                      fullWidth
-                      value={defaultValues.reps}
-                      onChange={(e) => handleDefaultValueChange('reps', Math.max(1, parseInt(e.target.value) || 1))}
-                      InputProps={{ inputProps: { min: 1 } }}
-                    />
-                    <Button 
-                      size="small" 
-                      onClick={() => handleApplyToAll('reps')}
-                      sx={{ mt: 1 }}
-                    >
-                      Apply to All
-                    </Button>
-                  </Grid>
-                  
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="Rest (seconds)"
-                      type="number"
-                      fullWidth
-                      value={defaultValues.rest_seconds}
-                      onChange={(e) => handleDefaultValueChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
-                      InputProps={{ inputProps: { min: 0 } }}
-                    />
-                    <Button 
-                      size="small" 
-                      onClick={() => handleApplyToAll('rest_seconds')}
-                      sx={{ mt: 1 }}
-                    >
-                      Apply to All
-                    </Button>
-                  </Grid>
-                  
-                  <Grid item xs={12} sm={6} md={3}>
-                    <TextField
-                      label="Target Weight"
-                      type="number"
-                      fullWidth
-                      value={defaultValues.target_weight || 0}
-                      onChange={(e) => handleDefaultValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                      InputProps={{
-                        inputProps: { min: 0, step: 2.5 },
-                        endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
-                      }}
-                    />
-                    <Button 
-                      size="small" 
-                      onClick={() => handleApplyToAll('target_weight')}
-                      sx={{ mt: 1 }}
-                    >
-                      Apply to All
-                    </Button>
-                  </Grid>
-                  
-                  <Grid item xs={12}>
-                    <FormControl fullWidth>
-                      <InputLabel id="default-day-label">Workout Day</InputLabel>
-                      <Select
-                        labelId="default-day-label"
-                        value={defaultValues.day_of_week}
-                        onChange={(e) => handleDefaultValueChange('day_of_week', e.target.value)}
-                        label="Workout Day"
-                      >
-                        {renderWeekdayOptions()}
-                      </Select>
-                    </FormControl>
-                    <Button 
-                      size="small" 
-                      onClick={() => handleApplyToAll('day_of_week')}
-                      sx={{ mt: 1 }}
-                    >
-                      Apply to All
-                    </Button>
-                  </Grid>
-                </Grid>
-              </Paper>
-            </Box>
-            
-            <Typography variant="h6" gutterBottom>
-              Exercise Configuration
-            </Typography>
-            
-            <TableContainer component={Paper} variant="outlined" sx={{ maxHeight: '400px', overflow: 'auto' }}>
-              <Table stickyHeader size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell>Exercise</TableCell>
-                    <TableCell align="center">Sets</TableCell>
-                    <TableCell align="center">Reps</TableCell>
-                    <TableCell align="center">Rest (s)</TableCell>
-                    <TableCell align="center">Weight ({weightUnit})</TableCell>
-                    <TableCell align="center">Day</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {configuredExercises.map((exercise, index) => (
-                    <TableRow key={exercise.id}>
-                      <TableCell>
-                        <Tooltip title={exercise.muscle_group || ''}>
-                          <Typography variant="body2">{exercise.name}</Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell align="center">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={exercise.sets}
-                          onChange={(e) => handleUpdateExercise(index, 'sets', Math.max(1, parseInt(e.target.value) || 1))}
-                          InputProps={{ inputProps: { min: 1, style: { textAlign: 'center' } } }}
-                          sx={{ width: '70px' }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={exercise.reps}
-                          onChange={(e) => handleUpdateExercise(index, 'reps', Math.max(1, parseInt(e.target.value) || 1))}
-                          InputProps={{ inputProps: { min: 1, style: { textAlign: 'center' } } }}
-                          sx={{ width: '70px' }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        <TextField
-                          type="number"
-                          size="small"
-                          value={exercise.rest_seconds}
-                          onChange={(e) => handleUpdateExercise(index, 'rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
-                          InputProps={{ inputProps: { min: 0, style: { textAlign: 'center' } } }}
-                          sx={{ width: '70px' }}
-                        />
-                      </TableCell>
-                      <TableCell align="center">
-                        {displayWeight(exercise.target_weight)}
-                      </TableCell>
-                      <TableCell align="center">
-                        <FormControl size="small" sx={{ minWidth: 120 }}>
-                          <Select
-                            value={exercise.day_of_week}
-                            onChange={(e) => handleUpdateExercise(index, 'day_of_week', e.target.value)}
-                            displayEmpty
-                          >
-                            {renderWeekdayOptions()}
-                          </Select>
-                        </FormControl>
-                      </TableCell>
-                    </TableRow>
+                  <MenuItem value="">All Categories</MenuItem>
+                  {categories.map((category) => (
+                    <MenuItem key={category} value={category}>
+                      {category}
+                    </MenuItem>
                   ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          </>
+                </Select>
+              </FormControl>
+            </Grid>
+            
+            {/* Muscle group filter */}
+            <Grid item xs={12} sm={6}>
+              <FormControl fullWidth>
+                <InputLabel id="muscle-group-select-label">Muscle Group</InputLabel>
+                <Select
+                  labelId="muscle-group-select-label"
+                  value={selectedMuscleGroup}
+                  label="Muscle Group"
+                  onChange={handleMuscleGroupChange}
+                >
+                  <MenuItem value="">All Muscle Groups</MenuItem>
+                  {muscleGroups.map((group) => (
+                    <MenuItem key={group} value={group}>
+                      {group}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            </Grid>
+          </Grid>
+          
+          {/* Filter controls and stats */}
+          <Box sx={{ mt: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Button 
+              size="small" 
+              onClick={handleResetFilters}
+            >
+              Reset Filters
+            </Button>
+            <Typography variant="body2" color="text.secondary">
+              {selectedExercises.length} selected / {filteredExercises.length} shown
+            </Typography>
+          </Box>
+        </Box>
+        
+        <Divider sx={{ mb: 2 }} />
+        
+        {/* Exercise list */}
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+            <CircularProgress />
+          </Box>
+        ) : filteredExercises.length === 0 ? (
+          <Typography align="center" color="text.secondary" sx={{ py: 4 }}>
+            No exercises found. Try adjusting your filters.
+          </Typography>
+        ) : (
+          <List sx={{ maxHeight: '400px', overflow: 'auto' }}>
+            {filteredExercises.map((exercise) => (
+              <ListItem key={exercise.id} divider>
+                <ListItemIcon>
+                  <FitnessCenterIcon />
+                </ListItemIcon>
+                <ListItemText
+                  primary={exercise.name}
+                  secondary={
+                    <>
+                      {exercise.muscle_group && (
+                        <Typography component="span" variant="body2" color="text.secondary">
+                          {exercise.muscle_group}
+                        </Typography>
+                      )}
+                      {exercise.category && (
+                        <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                          • {exercise.category}
+                        </Typography>
+                      )}
+                    </>
+                  }
+                />
+                <ListItemSecondaryAction>
+                  <Checkbox
+                    edge="end"
+                    onChange={() => handleToggleExercise(exercise.id)}
+                    checked={selectedExercises.includes(exercise.id)}
+                  />
+                </ListItemSecondaryAction>
+              </ListItem>
+            ))}
+          </List>
         )}
       </DialogContent>
       
       <DialogActions>
-        {activeStep === 0 ? (
-          <>
-            <Button onClick={onClose}>Cancel</Button>
-            <Button 
-              onClick={handleMoveToConfig}
-              variant="contained"
-              color="primary"
-              disabled={selectedExercises.length === 0}
-              endIcon={<ArrowForwardIcon />}
-            >
-              Configure ({selectedExercises.length})
-            </Button>
-          </>
-        ) : (
-          <>
-            <Button 
-              onClick={handleBackToSelection}
-              startIcon={<ArrowBackIcon />}
-            >
-              Back
-            </Button>
-            <Button 
-              onClick={handleConfirm}
-              variant="contained"
-              color="primary"
-              endIcon={<SettingsIcon />}
-            >
-              Add to Plan ({configuredExercises.length})
-            </Button>
-          </>
-        )}
+        <Button onClick={onClose}>Cancel</Button>
+        <Button 
+          onClick={handleMoveToConfig}
+          variant="contained"
+          color="primary"
+          disabled={selectedExercises.length === 0}
+        >
+          Add Selected ({selectedExercises.length})
+        </Button>
       </DialogActions>
     </Dialog>
   );

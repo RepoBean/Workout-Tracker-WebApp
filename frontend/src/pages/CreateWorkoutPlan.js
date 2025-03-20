@@ -41,7 +41,8 @@ import {
   Switch,
   Stepper,
   Step,
-  StepLabel
+  StepLabel,
+  FormHelperText
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -111,30 +112,6 @@ const CreateWorkoutPlan = () => {
   // New state for accordion UI
   const [expandedDays, setExpandedDays] = useState([]);
   
-  // Batch operations state
-  const [selectedExerciseIds, setSelectedExerciseIds] = useState([]);
-  const [batchConfigOpen, setBatchConfigOpen] = useState(false);
-  const [batchConfigValues, setBatchConfigValues] = useState({
-    sets: 3,
-    reps: 10,
-    rest_seconds: 60,
-    target_weight: 0,
-    day_of_week: null,
-    progression_type: 'weight',
-    progression_value: 2.5,
-    progression_threshold: 2
-  });
-  const [batchConfigFields, setBatchConfigFields] = useState({
-    sets: false,
-    reps: false,
-    rest_seconds: false,
-    target_weight: false,
-    day_of_week: false,
-    progression_type: false,
-    progression_value: false,
-    progression_threshold: false
-  });
-  
   // Current day for adding exercises
   const [currentAddDay, setCurrentAddDay] = useState(null);
   
@@ -191,115 +168,6 @@ const CreateWorkoutPlan = () => {
     }
   };
   
-  // Toggle exercise selection for batch operations
-  const handleToggleExerciseSelection = (exerciseId) => {
-    setSelectedExerciseIds(prev => {
-      if (prev.includes(exerciseId)) {
-        return prev.filter(id => id !== exerciseId);
-      } else {
-        return [...prev, exerciseId];
-      }
-    });
-  };
-  
-  // Select all exercises for a specific day
-  const handleSelectAllForDay = (day) => {
-    const dayExercises = exercises.filter(ex => ex.day_of_week === day);
-    const dayExerciseIds = dayExercises.map(ex => ex.id);
-    
-    if (dayExerciseIds.every(id => selectedExerciseIds.includes(id))) {
-      // If all are selected, deselect all
-      setSelectedExerciseIds(prev => prev.filter(id => !dayExerciseIds.includes(id)));
-    } else {
-      // Otherwise, select all
-      setSelectedExerciseIds(prev => [...prev, ...dayExerciseIds.filter(id => !prev.includes(id))]);
-    }
-  };
-  
-  // Clear all exercise selections
-  const handleClearExerciseSelection = () => {
-    setSelectedExerciseIds([]);
-  };
-  
-  // Open batch configuration dialog
-  const handleOpenBatchConfig = () => {
-    // Set default values based on first selected exercise
-    if (selectedExerciseIds.length > 0) {
-      const firstExercise = exercises.find(ex => ex.id === selectedExerciseIds[0]);
-      if (firstExercise) {
-        setBatchConfigValues({
-          sets: firstExercise.sets,
-          reps: firstExercise.reps,
-          rest_seconds: firstExercise.rest_seconds,
-          target_weight: firstExercise.target_weight,
-          day_of_week: firstExercise.day_of_week
-        });
-      }
-    }
-    
-    // Reset field selection
-    setBatchConfigFields({
-      sets: false,
-      reps: false,
-      rest_seconds: false,
-      target_weight: false,
-      day_of_week: false
-    });
-    
-    setBatchConfigOpen(true);
-  };
-  
-  // Update batch configuration values
-  const handleBatchConfigValueChange = (field, value) => {
-    setBatchConfigValues(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-  
-  // Toggle which fields to apply in batch update
-  const handleBatchConfigFieldToggle = (field) => {
-    setBatchConfigFields(prev => ({
-      ...prev,
-      [field]: !prev[field]
-    }));
-  };
-  
-  // Apply batch configuration to selected exercises
-  const handleSaveBatchConfig = () => {
-    const updatedExercises = exercises.map(exercise => {
-      if (!selectedExerciseIds.includes(exercise.id)) {
-        return exercise;
-      }
-      
-      // Apply only selected fields
-      const updates = {};
-      Object.keys(batchConfigFields).forEach(field => {
-        if (batchConfigFields[field]) {
-          updates[field] = batchConfigValues[field];
-        }
-      });
-      
-      return { ...exercise, ...updates };
-    });
-    
-    setExercises(updatedExercises);
-    setBatchConfigOpen(false);
-  };
-  
-  // Move selected exercises to a different day
-  const handleMoveSelectedExercises = (targetDay) => {
-    const updatedExercises = exercises.map(exercise => {
-      if (selectedExerciseIds.includes(exercise.id)) {
-        return { ...exercise, day_of_week: targetDay };
-      }
-      return exercise;
-    });
-    
-    setExercises(updatedExercises);
-    setSelectedExerciseIds([]);
-  };
-  
   // Get exercises for a specific day
   const getExercisesForDay = (day) => {
     return exercises.filter(exercise => exercise.day_of_week === day);
@@ -335,6 +203,15 @@ const CreateWorkoutPlan = () => {
     // If adding to a specific day's accordion, expand that day
     if (currentAddDay !== null) {
       setExpandedDays(prev => [...prev.filter(d => d !== currentAddDay), currentAddDay]);
+    }
+    
+    // Auto-open config dialog for newly added exercises
+    if (newExercises.length === 1) {
+      // If only one exercise was added, immediately open its config
+      const exerciseToConfig = newExercises[0];
+      if (!existingUniqueIds.includes(exerciseToConfig.uniqueId)) {
+        handleConfigureExercise(exerciseToConfig);
+      }
     }
   };
   
@@ -374,13 +251,6 @@ const CreateWorkoutPlan = () => {
   // Remove an exercise from the plan
   const handleRemoveExercise = (exerciseId) => {
     setExercises(prevExercises => prevExercises.filter(ex => ex.id !== exerciseId));
-    setSelectedExerciseIds(prev => prev.filter(id => id !== exerciseId));
-  };
-  
-  // Remove selected exercises
-  const handleRemoveSelectedExercises = () => {
-    setExercises(prevExercises => prevExercises.filter(ex => !selectedExerciseIds.includes(ex.id)));
-    setSelectedExerciseIds([]);
   };
   
   // Handle reordering exercises via drag and drop
@@ -635,7 +505,14 @@ const CreateWorkoutPlan = () => {
             </Typography>
             
             <Grid container spacing={2}>
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Basic Settings
+                </Typography>
+                <Divider sx={{ mb: 2 }} />
+              </Grid>
+              
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="Sets"
                   type="number"
@@ -646,7 +523,7 @@ const CreateWorkoutPlan = () => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="Reps"
                   type="number"
@@ -657,7 +534,7 @@ const CreateWorkoutPlan = () => {
                 />
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="Rest Between Sets (seconds)"
                   type="number"
@@ -682,7 +559,7 @@ const CreateWorkoutPlan = () => {
                 />
               </Grid>
               
-              <Grid item xs={12}>
+              <Grid item xs={12} sm={6}>
                 <FormControl fullWidth>
                   <InputLabel id="day-of-week-label">Workout Day</InputLabel>
                   <Select
@@ -711,13 +588,16 @@ const CreateWorkoutPlan = () => {
               </Grid>
               
               <Grid item xs={12}>
-                <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                <Typography variant="subtitle1" gutterBottom sx={{ mt: 3 }}>
                   Progression System
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                  The progression system automatically increases weight or reps after you successfully complete this exercise for a set number of sessions.
+                </Typography>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <FormControl fullWidth>
                   <InputLabel id="progression-type-label">Progression Type</InputLabel>
                   <Select
@@ -730,13 +610,13 @@ const CreateWorkoutPlan = () => {
                     <MenuItem value="reps">Rep Increase</MenuItem>
                     <MenuItem value="none">None</MenuItem>
                   </Select>
+                  <FormHelperText>
+                    How to progress in this exercise over time
+                  </FormHelperText>
                 </FormControl>
-                <Typography variant="caption" color="text.secondary">
-                  How to progress in this exercise over time
-                </Typography>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
                   label="Progression Value"
                   type="number"
@@ -751,14 +631,16 @@ const CreateWorkoutPlan = () => {
                   }}
                   disabled={currentExercise.progression_type === 'none'}
                 />
-                <Typography variant="caption" color="text.secondary">
-                  Amount to increase when progression occurs
-                </Typography>
+                <FormHelperText>
+                  {currentExercise.progression_type === 'weight' 
+                    ? `Amount of ${weightUnit} to add after success` 
+                    : 'Number of reps to add after success'}
+                </FormHelperText>
               </Grid>
               
-              <Grid item xs={12} sm={6}>
+              <Grid item xs={12} sm={6} md={4}>
                 <TextField
-                  label="Progression Threshold"
+                  label="Success Threshold"
                   type="number"
                   fullWidth
                   value={currentExercise.progression_threshold || ''}
@@ -769,10 +651,20 @@ const CreateWorkoutPlan = () => {
                   }}
                   disabled={currentExercise.progression_type === 'none'}
                 />
-                <Typography variant="caption" color="text.secondary">
+                <FormHelperText>
                   Number of successful sessions before progressing
-                </Typography>
+                </FormHelperText>
               </Grid>
+              
+              {currentExercise.progression_type !== 'none' && (
+                <Grid item xs={12}>
+                  <Alert severity="info" sx={{ mt: 1 }}>
+                    {currentExercise.progression_type === 'weight' 
+                      ? `Weight will increase by ${currentExercise.progression_value || 2.5} ${weightUnit} after ${currentExercise.progression_threshold || 2} successful sessions.` 
+                      : `Reps will increase by ${currentExercise.progression_value || 1} after ${currentExercise.progression_threshold || 2} successful sessions.`}
+                  </Alert>
+                </Grid>
+              )}
             </Grid>
           </Box>
         )}
@@ -781,217 +673,6 @@ const CreateWorkoutPlan = () => {
         <Button onClick={() => setExerciseConfigOpen(false)}>Cancel</Button>
         <Button onClick={handleSaveExerciseConfig} variant="contained" color="primary">
           Save
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
-  
-  // Batch configuration dialog
-  const batchConfigDialog = (
-    <Dialog open={batchConfigOpen} onClose={() => setBatchConfigOpen(false)} maxWidth="md" fullWidth>
-      <DialogTitle>
-        Batch Configure Exercises ({selectedExerciseIds.length} selected)
-      </DialogTitle>
-      <DialogContent dividers>
-        <Grid container spacing={3}>
-          <Grid item xs={12}>
-            <Alert severity="info" sx={{ mb: 2 }}>
-              Select which properties to update and set their values. Only checked properties will be changed.
-            </Alert>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom>
-              Basic Settings
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.sets} 
-                onChange={() => handleBatchConfigFieldToggle('sets')}
-              />
-              <Typography>Sets</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.sets}
-              onChange={(e) => handleBatchConfigValueChange('sets', Math.max(1, parseInt(e.target.value) || 1))}
-              InputProps={{ inputProps: { min: 1 } }}
-              disabled={!batchConfigFields.sets}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.reps} 
-                onChange={() => handleBatchConfigFieldToggle('reps')}
-              />
-              <Typography>Reps</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.reps}
-              onChange={(e) => handleBatchConfigValueChange('reps', Math.max(1, parseInt(e.target.value) || 1))}
-              InputProps={{ inputProps: { min: 1 } }}
-              disabled={!batchConfigFields.reps}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.rest_seconds} 
-                onChange={() => handleBatchConfigFieldToggle('rest_seconds')}
-              />
-              <Typography>Rest (seconds)</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.rest_seconds}
-              onChange={(e) => handleBatchConfigValueChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
-              InputProps={{ inputProps: { min: 0 } }}
-              disabled={!batchConfigFields.rest_seconds}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.target_weight} 
-                onChange={() => handleBatchConfigFieldToggle('target_weight')}
-              />
-              <Typography>Target Weight</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.target_weight}
-              onChange={(e) => handleBatchConfigValueChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-              InputProps={{ 
-                inputProps: { min: 0, step: 2.5 },
-                endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
-              }}
-              disabled={!batchConfigFields.target_weight}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.day_of_week} 
-                onChange={() => handleBatchConfigFieldToggle('day_of_week')}
-              />
-              <Typography>Workout Day</Typography>
-            </Box>
-            <FormControl fullWidth disabled={!batchConfigFields.day_of_week}>
-              <InputLabel id="batch-day-of-week-label">Workout Day</InputLabel>
-              <Select
-                labelId="batch-day-of-week-label"
-                value={batchConfigValues.day_of_week || ''}
-                onChange={(e) => handleBatchConfigValueChange('day_of_week', e.target.value)}
-                label="Workout Day"
-              >
-                <MenuItem value="">Not assigned</MenuItem>
-                {selectedDays.map((day) => (
-                  <MenuItem key={day} value={day}>
-                    {getWeekdayName(day)}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12}>
-            <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
-              Progression System
-            </Typography>
-            <Divider sx={{ mb: 2 }} />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.progression_type} 
-                onChange={() => handleBatchConfigFieldToggle('progression_type')}
-              />
-              <Typography>Progression Type</Typography>
-            </Box>
-            <FormControl fullWidth disabled={!batchConfigFields.progression_type}>
-              <InputLabel id="batch-progression-type-label">Type</InputLabel>
-              <Select
-                labelId="batch-progression-type-label"
-                value={batchConfigValues.progression_type || 'weight'}
-                onChange={(e) => handleBatchConfigValueChange('progression_type', e.target.value)}
-                label="Type"
-              >
-                <MenuItem value="weight">Weight Increase</MenuItem>
-                <MenuItem value="reps">Rep Increase</MenuItem>
-                <MenuItem value="none">None</MenuItem>
-              </Select>
-            </FormControl>
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.progression_value} 
-                onChange={() => handleBatchConfigFieldToggle('progression_value')}
-              />
-              <Typography>Progress Value</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.progression_value}
-              onChange={(e) => handleBatchConfigValueChange('progression_value', Math.max(0.5, parseFloat(e.target.value) || 0.5))}
-              InputProps={{ 
-                inputProps: { min: 0.5, step: 0.5 },
-                endAdornment: <InputAdornment position="end">
-                  {batchConfigValues.progression_type === 'weight' ? weightUnit : 'reps'}
-                </InputAdornment>
-              }}
-              disabled={!batchConfigFields.progression_value || batchConfigValues.progression_type === 'none'}
-            />
-          </Grid>
-          
-          <Grid item xs={12} sm={6} md={4}>
-            <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-              <Checkbox 
-                checked={batchConfigFields.progression_threshold} 
-                onChange={() => handleBatchConfigFieldToggle('progression_threshold')}
-              />
-              <Typography>Progress Threshold</Typography>
-            </Box>
-            <TextField
-              type="number"
-              fullWidth
-              value={batchConfigValues.progression_threshold}
-              onChange={(e) => handleBatchConfigValueChange('progression_threshold', Math.max(1, parseInt(e.target.value) || 1))}
-              InputProps={{ 
-                inputProps: { min: 1 },
-                endAdornment: <InputAdornment position="end">sessions</InputAdornment>
-              }}
-              disabled={!batchConfigFields.progression_threshold || batchConfigValues.progression_type === 'none'}
-            />
-          </Grid>
-        </Grid>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setBatchConfigOpen(false)}>Cancel</Button>
-        <Button 
-          onClick={handleSaveBatchConfig} 
-          variant="contained" 
-          color="primary"
-          disabled={!Object.values(batchConfigFields).some(Boolean)}
-        >
-          Apply Changes
         </Button>
       </DialogActions>
     </Dialog>
@@ -1166,72 +847,6 @@ const CreateWorkoutPlan = () => {
             </Alert>
           )}
           
-          {/* Batch actions section */}
-          {selectedExerciseIds.length > 0 && (
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              bgcolor: 'action.hover', 
-              p: 2, 
-              borderRadius: 1,
-              mb: 2
-            }}>
-              <Typography variant="subtitle1" sx={{ mr: 2 }}>
-                {selectedExerciseIds.length} exercises selected
-              </Typography>
-              
-              <Button 
-                size="small" 
-                onClick={handleOpenBatchConfig}
-                startIcon={<TuneIcon />}
-                sx={{ mr: 1 }}
-              >
-                Configure
-              </Button>
-              
-              <FormControl size="small" sx={{ minWidth: 120, mx: 1 }}>
-                <InputLabel id="move-to-day-label">Move to</InputLabel>
-                <Select
-                  labelId="move-to-day-label"
-                  value=""
-                  label="Move to"
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleMoveSelectedExercises(e.target.value);
-                    }
-                  }}
-                  displayEmpty
-                >
-                  <MenuItem value="" disabled>Select day</MenuItem>
-                  <MenuItem value={null}>Unassigned</MenuItem>
-                  {selectedDays.map(day => (
-                    <MenuItem key={day} value={day}>
-                      {getWeekdayName(day)}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-              
-              <Button 
-                size="small" 
-                color="error" 
-                onClick={handleRemoveSelectedExercises}
-                startIcon={<DeleteIcon />}
-                sx={{ mx: 1 }}
-              >
-                Remove
-              </Button>
-              
-              <Button 
-                size="small" 
-                onClick={handleClearExerciseSelection}
-                sx={{ ml: 'auto' }}
-              >
-                Clear Selection
-              </Button>
-            </Box>
-          )}
-          
           {/* Wrap all exercise sections in a single DragDropContext */}
           <DragDropContext onDragEnd={handleDragEnd}>
             {/* Unassigned exercises section - only show if there are unassigned exercises */}
@@ -1267,19 +882,6 @@ const CreateWorkoutPlan = () => {
                     </Typography>
                   ) : (
                     <Box sx={{ mb: 2 }}>
-                      {/* Select all checkbox */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <Checkbox
-                          checked={getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))}
-                          indeterminate={
-                            getUnassignedExercises().some(ex => selectedExerciseIds.includes(ex.id)) &&
-                            !getUnassignedExercises().every(ex => selectedExerciseIds.includes(ex.id))
-                          }
-                          onChange={() => handleSelectAllForDay(null)}
-                        />
-                        <Typography>Select All</Typography>
-                      </Box>
-                      
                       {/* Exercise List */}
                       <Droppable droppableId="unassigned">
                         {(provided) => (
@@ -1303,19 +905,12 @@ const CreateWorkoutPlan = () => {
                                       </IconButton>
                                     }
                                     sx={{ 
-                                      bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
                                       '&:hover': { bgcolor: 'action.hover' },
                                       boxShadow: snapshot.isDragging ? 3 : 0,
                                       opacity: snapshot.isDragging ? 0.8 : 1,
                                       transition: 'box-shadow 0.2s, opacity 0.2s'
                                     }}
                                   >
-                                    <Checkbox
-                                      checked={selectedExerciseIds.includes(exercise.id)}
-                                      onChange={() => handleToggleExerciseSelection(exercise.id)}
-                                      edge="start"
-                                    />
-                                    
                                     <Box 
                                       {...provided.dragHandleProps} 
                                       sx={{ 
@@ -1399,19 +994,6 @@ const CreateWorkoutPlan = () => {
                     </Typography>
                   ) : (
                     <Box sx={{ mb: 2 }}>
-                      {/* Select all checkbox */}
-                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                        <Checkbox
-                          checked={getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))}
-                          indeterminate={
-                            getExercisesForDay(day).some(ex => selectedExerciseIds.includes(ex.id)) &&
-                            !getExercisesForDay(day).every(ex => selectedExerciseIds.includes(ex.id))
-                          }
-                          onChange={() => handleSelectAllForDay(day)}
-                        />
-                        <Typography>Select All</Typography>
-                      </Box>
-                      
                       {/* Exercise List for this day */}
                       <Droppable droppableId={`day-${day}`}>
                         {(provided) => (
@@ -1435,20 +1017,12 @@ const CreateWorkoutPlan = () => {
                                       </IconButton>
                                     }
                                     sx={{ 
-                                      bgcolor: selectedExerciseIds.includes(exercise.id) ? 'action.selected' : 'inherit',
                                       '&:hover': { bgcolor: 'action.hover' },
-                                      // Add better visual feedback during dragging
                                       boxShadow: snapshot.isDragging ? 3 : 0,
                                       opacity: snapshot.isDragging ? 0.8 : 1,
                                       transition: 'box-shadow 0.2s, opacity 0.2s'
                                     }}
                                   >
-                                    <Checkbox
-                                      checked={selectedExerciseIds.includes(exercise.id)}
-                                      onChange={() => handleToggleExerciseSelection(exercise.id)}
-                                      edge="start"
-                                    />
-                                    
                                     <Box 
                                       {...provided.dragHandleProps} 
                                       sx={{ 
@@ -1538,9 +1112,6 @@ const CreateWorkoutPlan = () => {
       
       {/* Exercise configuration dialog */}
       {exerciseConfigDialog}
-      
-      {/* Batch configuration dialog */}
-      {batchConfigDialog}
       
       {/* Loading overlay */}
       {isLoading && (
