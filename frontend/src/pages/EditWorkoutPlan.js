@@ -19,7 +19,11 @@ import {
   Alert,
   Snackbar,
   CircularProgress,
-  InputAdornment
+  InputAdornment,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Badge
 } from '@mui/material';
 import {
   Add as AddIcon,
@@ -27,7 +31,8 @@ import {
   DragIndicator as DragIcon,
   Save as SaveIcon,
   ArrowBack as ArrowBackIcon,
-  FitnessCenter as FitnessCenterIcon
+  FitnessCenter as FitnessCenterIcon,
+  ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 import { workoutPlansApi, handleApiError } from '../utils/api';
@@ -58,6 +63,9 @@ const EditWorkoutPlan = () => {
   const [formErrors, setFormErrors] = useState({});
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [unsavedChanges, setUnsavedChanges] = useState(false);
+  const [selectedDays, setSelectedDays] = useState([]);
+  const [expandedDays, setExpandedDays] = useState([]);
+  const [currentDayOfWeek, setCurrentDayOfWeek] = useState(null);
   
   // Fetch workout plan details
   useEffect(() => {
@@ -100,7 +108,8 @@ const EditWorkoutPlan = () => {
               target_weight: displayWeight,
               notes: ex.notes || '',
               order: ex.order || 0,
-              plan_exercise_id: ex.id
+              plan_exercise_id: ex.id,
+              day_of_week: ex.day_of_week
             };
             
             return formattedEx;
@@ -137,7 +146,8 @@ const EditWorkoutPlan = () => {
           rest_seconds: ex.rest_seconds || 60,
           notes: ex.notes || '',
           order: ex.order || 0,
-          plan_exercise_id: ex.id
+          plan_exercise_id: ex.id,
+          day_of_week: ex.day_of_week
         })));
       
       setUnsavedChanges(hasChanges);
@@ -157,7 +167,8 @@ const EditWorkoutPlan = () => {
   };
   
   // Open exercise selector
-  const handleAddExercises = () => {
+  const handleAddExercises = (dayOfWeek = null) => {
+    setCurrentDayOfWeek(dayOfWeek);
     setSelectorOpen(true);
   };
   
@@ -171,6 +182,7 @@ const EditWorkoutPlan = () => {
       rest_seconds: 60,
       target_weight: 0,
       notes: '',
+      day_of_week: currentDayOfWeek,
       // If the exercise already exists, don't add it again
       ...(exercises.find(e => e.id === exercise.id) || {})
     }));
@@ -324,7 +336,8 @@ const EditWorkoutPlan = () => {
           reps: exToAdd.reps,
           rest_seconds: exToAdd.rest_seconds,
           target_weight: convertedWeight, // This is now in kg for storage
-          order: exToAdd.order
+          order: exToAdd.order,
+          day_of_week: exToAdd.day_of_week
         };
         
         console.log('DEBUG - Adding exercise with data:', {
@@ -353,7 +366,8 @@ const EditWorkoutPlan = () => {
           reps: exToUpdate.reps,
           rest_seconds: exToUpdate.rest_seconds,
           target_weight: convertedWeight, // This is now in kg for storage
-          order: exToUpdate.order
+          order: exToUpdate.order,
+          day_of_week: exToUpdate.day_of_week
         };
         
         console.log('DEBUG - Updating exercise with data:', {
@@ -411,6 +425,52 @@ const EditWorkoutPlan = () => {
   const handleConfirmDiscard = () => {
     setConfirmDialogOpen(false);
     navigate(`/workout-plans/${id}`);
+  };
+  
+  // When loading the plan data, initialize selected days
+  useEffect(() => {
+    if (originalPlan && originalPlan.exercises) {
+      // Extract unique days from exercises
+      const days = [...new Set(originalPlan.exercises
+        .filter(ex => ex.day_of_week)
+        .map(ex => ex.day_of_week))]
+        .sort((a, b) => a - b);
+      
+      setSelectedDays(days);
+      // Expand the first day by default if there are days
+      if (days.length > 0) {
+        setExpandedDays([days[0]]);
+      }
+    }
+  }, [originalPlan]);
+  
+  // Get exercises for a specific day
+  const getExercisesForDay = (day) => {
+    return exercises.filter(ex => ex.day_of_week === day);
+  };
+  
+  // Handle accordion expansion
+  const handleAccordionChange = (day) => (event, isExpanded) => {
+    if (isExpanded) {
+      setExpandedDays(prev => [...prev, day]);
+    } else {
+      setExpandedDays(prev => prev.filter(d => d !== day));
+    }
+  };
+  
+  // Get weekday name
+  const getWeekdayName = (value) => {
+    const WEEKDAYS = [
+      { name: 'Monday', value: 1 },
+      { name: 'Tuesday', value: 2 },
+      { name: 'Wednesday', value: 3 },
+      { name: 'Thursday', value: 4 },
+      { name: 'Friday', value: 5 },
+      { name: 'Saturday', value: 6 },
+      { name: 'Sunday', value: 7 }
+    ];
+    const day = WEEKDAYS.find(d => d.value === value);
+    return day ? day.name : `Day ${value}`;
   };
   
   if (isLoading) {
@@ -505,117 +565,140 @@ const EditWorkoutPlan = () => {
       <Paper sx={{ mb: 3, p: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
           <Typography variant="h6" component="h2">
-            Exercises
+            Exercises by Day
           </Typography>
-          
-          <Button
-            variant="outlined"
-            startIcon={<AddIcon />}
-            onClick={handleAddExercises}
-            disabled={isSaving}
-          >
-            Add Exercises
-          </Button>
         </Box>
         
-        {formErrors.exercises && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {formErrors.exercises}
-          </Alert>
-        )}
-        
-        {exercises.length === 0 ? (
+        {selectedDays.length === 0 ? (
           <Alert severity="info">
-            No exercises added yet. Click "Add Exercises" to select exercises for this plan.
+            This workout plan doesn't have any days assigned. Add exercises to days to get started.
           </Alert>
         ) : (
-          <DragDropContext onDragEnd={handleDragEnd}>
-            <Droppable droppableId="exercises">
-              {(provided) => (
-                <List 
-                  {...provided.droppableProps}
-                  ref={provided.innerRef}
-                  sx={{ 
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1
-                  }}
-                >
-                  {exercises.map((exercise, index) => (
-                    <Draggable key={String(exercise.id)} draggableId={String(exercise.id)} index={index}>
-                      {(provided, snapshot) => (
-                        <ListItem
-                          ref={provided.innerRef}
-                          {...provided.draggableProps}
-                          divider={index < exercises.length - 1}
-                          secondaryAction={
-                            <IconButton 
-                              edge="end" 
-                              aria-label="delete"
-                              onClick={() => handleRemoveExercise(exercise.id)}
-                              disabled={isSaving}
-                            >
-                              <DeleteIcon />
-                            </IconButton>
-                          }
-                          sx={{ 
-                            bgcolor: 'inherit',
-                            '&:hover': { bgcolor: 'action.hover' },
-                            // Add better visual feedback during dragging
-                            boxShadow: snapshot.isDragging ? 3 : 0,
-                            opacity: snapshot.isDragging ? 0.8 : 1,
-                            transform: snapshot.isDragging ? 'scale(1.02)' : 'none',
-                            transition: 'box-shadow 0.2s, opacity 0.2s, transform 0.2s'
-                          }}
-                        >
-                          <Box 
-                            {...provided.dragHandleProps}
+          <Box>
+            {selectedDays.map(day => (
+              <Accordion
+                key={day}
+                expanded={expandedDays.includes(day)}
+                onChange={handleAccordionChange(day)}
+                sx={{ mb: 2 }}
+              >
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                    <Typography variant="subtitle1" sx={{ flexGrow: 1 }}>
+                      {getWeekdayName(day)} Exercises
+                    </Typography>
+                    <Badge badgeContent={getExercisesForDay(day).length} color="primary" sx={{ mr: 2 }} />
+                    <Button
+                      size="small"
+                      startIcon={<AddIcon />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAddExercises(day);
+                      }}
+                      sx={{ mr: 2 }}
+                    >
+                      Add
+                    </Button>
+                  </Box>
+                </AccordionSummary>
+                <AccordionDetails>
+                  {getExercisesForDay(day).length === 0 ? (
+                    <Typography align="center" color="text.secondary" sx={{ py: 2 }}>
+                      No exercises for {getWeekdayName(day)}. Add exercises to this day.
+                    </Typography>
+                  ) : (
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId={`day-${day}`}>
+                        {(provided) => (
+                          <List 
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
                             sx={{ 
-                              display: 'flex',
-                              alignItems: 'center',
-                              cursor: 'grab',
-                              '&:active': { cursor: 'grabbing' },
-                              mr: 1,
-                              color: 'primary.main',
-                              '&:hover': { color: 'secondary.main' }
+                              border: '1px solid',
+                              borderColor: 'divider',
+                              borderRadius: 1
                             }}
                           >
-                            <DragIcon />
-                          </Box>
-                          
-                          <ListItemIcon>
-                            <FitnessCenterIcon />
-                          </ListItemIcon>
-                          
-                          <ListItemText
-                            primary={exercise.name}
-                            secondary={
-                              <>
-                                {exercise.muscle_group}
-                                <Typography component="span" variant="body2" sx={{ display: 'block' }}>
-                                  {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                </Typography>
-                              </>
-                            }
-                          />
-                          
-                          <Button
-                            size="small"
-                            onClick={() => handleConfigureExercise(exercise)}
-                            sx={{ mr: 7 }}
-                            disabled={isSaving}
-                          >
-                            Configure
-                          </Button>
-                        </ListItem>
-                      )}
-                    </Draggable>
-                  ))}
-                  {provided.placeholder}
-                </List>
-              )}
-            </Droppable>
-          </DragDropContext>
+                            {getExercisesForDay(day).map((exercise, index) => (
+                              <Draggable key={String(exercise.id)} draggableId={String(exercise.id)} index={index}>
+                                {(provided, snapshot) => (
+                                  <ListItem
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    divider={index < getExercisesForDay(day).length - 1}
+                                    secondaryAction={
+                                      <IconButton 
+                                        edge="end" 
+                                        aria-label="delete"
+                                        onClick={() => handleRemoveExercise(exercise.id)}
+                                        disabled={isSaving}
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    }
+                                    sx={{ 
+                                      bgcolor: 'inherit',
+                                      '&:hover': { bgcolor: 'action.hover' },
+                                      // Add better visual feedback during dragging
+                                      boxShadow: snapshot.isDragging ? 3 : 0,
+                                      opacity: snapshot.isDragging ? 0.8 : 1,
+                                      transform: snapshot.isDragging ? 'scale(1.02)' : 'none',
+                                      transition: 'box-shadow 0.2s, opacity 0.2s, transform 0.2s'
+                                    }}
+                                  >
+                                    <Box 
+                                      {...provided.dragHandleProps}
+                                      sx={{ 
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        cursor: 'grab',
+                                        '&:active': { cursor: 'grabbing' },
+                                        mr: 1,
+                                        color: 'primary.main',
+                                        '&:hover': { color: 'secondary.main' }
+                                      }}
+                                    >
+                                      <DragIcon />
+                                    </Box>
+                                    
+                                    <ListItemIcon>
+                                      <FitnessCenterIcon />
+                                    </ListItemIcon>
+                                    
+                                    <ListItemText
+                                      primary={exercise.name}
+                                      secondary={
+                                        <>
+                                          {exercise.muscle_group}
+                                          <Typography component="span" variant="body2" sx={{ display: 'block' }}>
+                                            {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
+                                          </Typography>
+                                        </>
+                                      }
+                                    />
+                                    
+                                    <Button
+                                      size="small"
+                                      onClick={() => handleConfigureExercise(exercise)}
+                                      sx={{ mr: 7 }}
+                                      disabled={isSaving}
+                                    >
+                                      Configure
+                                    </Button>
+                                  </ListItem>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
+                          </List>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
+                  )}
+                </AccordionDetails>
+              </Accordion>
+            ))}
+          </Box>
         )}
       </Paper>
       

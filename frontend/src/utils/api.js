@@ -72,11 +72,18 @@ export const workoutPlansApi = {
   deleteExercise: (planId, exerciseId) => 
     api.delete(`/api/plans/${planId}/exercises/${exerciseId}`),
   export: (id) => api.get(`/api/plans/${id}/export`, { responseType: 'blob' }),
-  import: (formData) => api.post('/api/plans/import', formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  }),
+  import: (formData, weightUnit = "kg") => {
+    // Add weight unit to form data if provided
+    if (weightUnit) {
+      formData.append('weight_unit', weightUnit);
+    }
+    
+    return api.post('/api/plans/import', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
   getNextWorkout: () => api.get('/api/plans/next'),
   activate: (id) => api.post(`/api/plans/${id}/activate`),
 };
@@ -114,6 +121,12 @@ export const exercisesApi = {
   create: (exerciseData) => api.post('/api/exercises', exerciseData),
   update: (id, exerciseData) => api.put(`/api/exercises/${id}`, exerciseData),
   delete: (id) => api.delete(`/api/exercises/${id}`),
+  export: () => api.get('/api/exercises/export'),
+  import: (formData) => api.post('/api/exercises/import', formData, {
+    headers: {
+      'Content-Type': 'multipart/form-data',
+    },
+  }),
 };
 
 // Progress API

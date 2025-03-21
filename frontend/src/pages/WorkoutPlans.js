@@ -25,7 +25,11 @@ import {
   ListItemText,
   Paper,
   Alert,
-  Snackbar
+  Snackbar,
+  FormControl,
+  Select,
+  InputLabel,
+  FormHelperText
 } from '@mui/material';
 import {
   FitnessCenter as FitnessCenterIcon,
@@ -56,6 +60,7 @@ const WorkoutPlans = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [error, setError] = useState(null);
+  const [importWeightUnit, setImportWeightUnit] = useState('lbs');
 
   // Get workout plans on mount
   useEffect(() => {
@@ -240,7 +245,7 @@ const WorkoutPlans = () => {
       const formData = new FormData();
       formData.append('file', uploadFile);
       
-      await workoutPlansApi.import(formData);
+      await workoutPlansApi.import(formData, importWeightUnit);
       
       fetchWorkoutPlans();
       setUploadDialogOpen(false);
@@ -253,9 +258,15 @@ const WorkoutPlans = () => {
       });
     } catch (error) {
       console.error('Error importing workout plan:', error);
+      
+      let errorMessage = 'Failed to import workout plan';
+      if (error.response && error.response.data && error.response.data.detail) {
+        errorMessage = `Import failed: ${error.response.data.detail}`;
+      }
+      
       setSnackbar({
         open: true,
-        message: 'Failed to import workout plan',
+        message: errorMessage,
         severity: 'error'
       });
     }
@@ -542,6 +553,22 @@ const WorkoutPlans = () => {
                 Selected file: {uploadFile.name}
               </Typography>
             )}
+            
+            <FormControl fullWidth sx={{ mt: 3 }}>
+              <InputLabel id="weight-unit-select-label">Weight Unit in File</InputLabel>
+              <Select
+                labelId="weight-unit-select-label"
+                value={importWeightUnit}
+                label="Weight Unit in File"
+                onChange={(e) => setImportWeightUnit(e.target.value)}
+              >
+                <MenuItem value="kg">Kilograms (kg)</MenuItem>
+                <MenuItem value="lbs">Pounds (lbs)</MenuItem>
+              </Select>
+              <FormHelperText>
+                Select the weight unit used in your import file
+              </FormHelperText>
+            </FormControl>
           </Box>
         </DialogContent>
         <DialogActions>

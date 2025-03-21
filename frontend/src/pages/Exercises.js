@@ -34,7 +34,9 @@ import {
   Search as SearchIcon,
   Delete as DeleteIcon,
   Edit as EditIcon,
-  FitnessCenter as FitnessCenterIcon
+  FitnessCenter as FitnessCenterIcon,
+  FileDownload as FileDownloadIcon,
+  FileUpload as FileUploadIcon
 } from '@mui/icons-material';
 import { exercisesApi } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -62,6 +64,10 @@ const Exercises = () => {
   const [deleteDialog, setDeleteDialog] = useState({
     open: false,
     exerciseId: null
+  });
+  const [uploadDialog, setUploadDialog] = useState({
+    open: false,
+    file: null
   });
   const [snackbar, setSnackbar] = useState({
     open: false,
@@ -305,6 +311,104 @@ const Exercises = () => {
     return groups;
   };
 
+  // Export exercise library
+  const handleExportExerciseLibrary = async () => {
+    try {
+      console.log('Starting exercise export...');
+      const response = await exercisesApi.export();
+      console.log('Export API response:', response);
+      
+      // Create a blob from the JSON data
+      const jsonData = JSON.stringify(response.data, null, 2);
+      const blob = new Blob([jsonData], { type: 'application/json' });
+      
+      // Create a download link for the exported file
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'exercise_library.json');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setSnackbar({
+        open: true,
+        message: 'Exercise library exported successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error exporting exercise library:', error);
+      console.error('Error details:', error.response ? error.response.data : 'No response data');
+      setSnackbar({
+        open: true,
+        message: 'Failed to export exercise library',
+        severity: 'error'
+      });
+    }
+  };
+
+  // Open upload dialog
+  const handleUploadClick = () => {
+    setUploadDialog({
+      open: true,
+      file: null
+    });
+  };
+
+  // Handle file selection
+  const handleFileChange = (event) => {
+    setUploadDialog(prev => ({
+      ...prev,
+      file: event.target.files[0]
+    }));
+  };
+
+  // Close upload dialog
+  const handleCloseUploadDialog = () => {
+    setUploadDialog({
+      open: false,
+      file: null
+    });
+  };
+
+  // Import exercises
+  const handleImportExercises = async () => {
+    if (!uploadDialog.file) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Create a FormData object
+      const formData = new FormData();
+      formData.append('file', uploadDialog.file);
+      
+      // Send to the backend
+      const response = await exercisesApi.import(formData);
+      
+      // Refresh the exercises list
+      fetchExercises();
+      
+      // Show results
+      setSnackbar({
+        open: true,
+        message: response.data.message,
+        severity: response.data.results.failed > 0 ? 'warning' : 'success'
+      });
+      
+      // Close the dialog
+      handleCloseUploadDialog();
+    } catch (error) {
+      console.error('Error importing exercises:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to import exercises: ' + (error.response?.data?.detail || error.message),
+        severity: 'error'
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // If loading
   if (isLoading && exercises.length === 0) {
     return (
@@ -338,14 +442,30 @@ const Exercises = () => {
       {/* Header with actions */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h4">Exercises</Typography>
-        <Button 
-          variant="contained" 
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleCreateExercise}
-        >
-          Add Exercise
-        </Button>
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileDownloadIcon />}
+            onClick={handleExportExerciseLibrary}
+          >
+            Export Library
+          </Button>
+          <Button 
+            variant="outlined" 
+            startIcon={<FileUploadIcon />}
+            onClick={handleUploadClick}
+          >
+            Import Exercises
+          </Button>
+          <Button 
+            variant="contained" 
+            color="primary"
+            startIcon={<AddIcon />}
+            onClick={handleCreateExercise}
+          >
+            Add Exercise
+          </Button>
+        </Box>
       </Box>
       
       {/* Search bar */}
@@ -575,6 +695,52 @@ const Exercises = () => {
           <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
           <Button onClick={handleDeleteExercise} color="error">
             Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Import Dialog */}
+      <Dialog
+        open={uploadDialog.open}
+        onClose={handleCloseUploadDialog}
+      >
+        <DialogTitle>Import Exercises</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Upload a JSON file with exercise details. The file should contain an array of exercise objects.
+          </DialogContentText>
+          
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              component="label"
+              startIcon={<FileUploadIcon />}
+            >
+              Select File
+              <input
+                type="file"
+                accept=".json"
+                hidden
+                onChange={handleFileChange}
+              />
+            </Button>
+            
+            {uploadDialog.file && (
+              <Typography variant="body2" sx={{ mt: 1 }}>
+                Selected file: {uploadDialog.file.name}
+              </Typography>
+            )}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseUploadDialog}>Cancel</Button>
+          <Button 
+            onClick={handleImportExercises} 
+            variant="contained" 
+            color="primary"
+            disabled={!uploadDialog.file}
+          >
+            Import
           </Button>
         </DialogActions>
       </Dialog>

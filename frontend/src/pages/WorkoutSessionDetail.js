@@ -317,7 +317,8 @@ const WorkoutSessionDetail = () => {
       <Typography variant="h5" gutterBottom>Exercises Performed</Typography>
       
       {session.exercises && session.exercises.length > 0 ? (
-        session.exercises.map((exercise, index) => (
+        // Sort exercises by their order field
+        [...session.exercises].sort((a, b) => (a.order || 0) - (b.order || 0)).map((exercise, index) => (
           <Card key={exercise.id || index} sx={{ mb: 2 }}>
             <CardContent>
               <Typography variant="h6" gutterBottom>
@@ -328,7 +329,7 @@ const WorkoutSessionDetail = () => {
               </Typography>
               
               <Grid container spacing={2} sx={{ mb: 2, mt: 1 }}>
-                <Grid item xs={4}>
+                <Grid item xs={3}>
                   <Typography variant="subtitle2" color="text.secondary">Target Weight</Typography>
                   <Typography>
                     {exercise.target_weight > 0
@@ -336,23 +337,39 @@ const WorkoutSessionDetail = () => {
                       : '—'}
                   </Typography>
                 </Grid>
-                <Grid item xs={4}>
+                <Grid item xs={3}>
                   <Typography variant="subtitle2" color="text.secondary">Muscle Group</Typography>
                   <Typography>
                     {getExerciseProp(exercise, 'muscle_group')}
                   </Typography>
                 </Grid>
-                <Grid item xs={4}>
-                  <Typography variant="subtitle2" color="text.secondary">Status</Typography>
+                <Grid item xs={3}>
+                  <Typography variant="subtitle2" color="text.secondary">Target Sets</Typography>
                   <Typography>
-                    {exercise.completed ? (
-                      <Chip size="small" color="success" label="Completed" />
-                    ) : (
-                      <Chip size="small" color="default" label="Skipped" />
-                    )}
+                    {exercise.sets_count || '—'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={3}>
+                  <Typography variant="subtitle2" color="text.secondary">Target Reps</Typography>
+                  <Typography>
+                    {exercise.target_reps || '—'}
                   </Typography>
                 </Grid>
               </Grid>
+              
+              {/* Show sets completion progress */}
+              {exercise.sets_count > 0 && (
+                <Box sx={{ mb: 2 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Completed {exercise.sets?.length || 0} of {exercise.sets_count} sets
+                  </Typography>
+                  <LinearProgress 
+                    variant="determinate" 
+                    value={(exercise.sets?.length || 0) / exercise.sets_count * 100}
+                    sx={{ mt: 0.5 }}
+                  />
+                </Box>
+              )}
               
               <TableContainer component={Paper} variant="outlined">
                 <Table size="small">
@@ -361,7 +378,6 @@ const WorkoutSessionDetail = () => {
                       <TableCell>Set</TableCell>
                       <TableCell>Weight</TableCell>
                       <TableCell>Reps</TableCell>
-                      <TableCell>Status</TableCell>
                     </TableRow>
                   </TableHead>
                   <TableBody>
@@ -372,13 +388,6 @@ const WorkoutSessionDetail = () => {
                           {set.weight ? displayWeight(set.weight) : '-'}
                         </TableCell>
                         <TableCell>{set.reps || '-'}</TableCell>
-                        <TableCell>
-                          {set.completed ? (
-                            <Chip size="small" color="success" label="Completed" />
-                          ) : (
-                            <Chip size="small" color="default" label="Skipped" />
-                          )}
-                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

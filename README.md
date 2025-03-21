@@ -23,7 +23,7 @@ The application is optimized for mobile use during workouts and features a respo
 - ✅ Workout plan management
 - ✅ Workout session tracking
 - ✅ Progress tracking endpoints
-- ⏳ Database migrations (planned)
+- ⏳ Database migrations (planned low priority)
 - ⏳ Seed data for exercises (planned)
 
 ### Frontend (React)

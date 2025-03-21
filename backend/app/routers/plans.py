@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from typing import List, Optional
+import json
+from fastapi import File, UploadFile, Response, Form
 
 from app.database import get_db
 from app.models.models import WorkoutPlan, PlanExercise, Exercise, User
@@ -16,6 +18,22 @@ from app.schemas.workout_plan import (
 from app.services.auth import get_current_active_user
 
 router = APIRouter()
+
+# Add weight conversion utility function
+def convert_weight(weight, from_unit, to_unit="kg"):
+    """Convert weight between lbs and kg."""
+    if weight is None or weight == 0:
+        return 0
+        
+    if from_unit.lower() == to_unit.lower():
+        return weight
+        
+    if from_unit.lower() == "lbs" and to_unit.lower() == "kg":
+        return round(weight * 0.453592, 2)  # lb to kg
+    elif from_unit.lower() == "kg" and to_unit.lower() == "lbs":
+        return round(weight * 2.20462, 2)  # kg to lb
+        
+    return weight  # Default case - no conversion
 
 @router.post("", response_model=WorkoutPlanResponse)
 async def create_workout_plan(
@@ -644,4 +662,178 @@ async def activate_workout_plan(
     db.commit()
     db.refresh(db_plan)
     
-    return db_plan 
+    return db_plan
+
+@router.get("/{plan_id}/export", response_model=None)
+async def export_workout_plan(
+    plan_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Export a workout plan as a JSON file.
+    Users can export their own plans or public plans.
+    """
+    # Get the plan to export
+    plan = db.query(WorkoutPlan).filter(WorkoutPlan.id == plan_id).first()
+    
+    if not plan:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workout plan not found"
+        )
+    
+    # Check if user has access to this plan
+    if plan.owner_id != current_user.id and not plan.is_public:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to export this workout plan"
+        )
+    
+    # Fetch the exercises for this plan
+    plan_exercises = db.query(PlanExercise).filter(
+        PlanExercise.workout_plan_id == plan_id
+    ).all()
+    
+    # Get exercise details
+    for plan_exercise in plan_exercises:
+        exercise = db.query(Exercise).filter(Exercise.id == plan_exercise.exercise_id).first()
+        if exercise:
+            plan_exercise.exercise_name = exercise.name
+            plan_exercise.muscle_group = exercise.muscle_group
+            plan_exercise.category = exercise.category
+    
+    # Create export data structure
+    export_data = {
+        "name": plan.name,
+        "description": plan.description,
+        "days_per_week": plan.days_per_week,
+        "duration_weeks": plan.duration_weeks,
+        "is_public": plan.is_public,
+        "exercises": []
+    }
+    
+    # Add exercises to export data
+    for ex in plan_exercises:
+        export_data["exercises"].append({
+            "exercise_id": ex.exercise_id,
+            "exercise_name": getattr(ex, "exercise_name", None),
+            "sets": ex.sets,
+            "reps": ex.reps,
+            "rest_seconds": ex.rest_seconds,
+            "target_weight": ex.target_weight,
+            "order": ex.order,
+            "day_of_week": ex.day_of_week,
+            "progression_type": ex.progression_type,
+            "progression_value": ex.progression_value,
+            "progression_threshold": ex.progression_threshold
+        })
+    
+    # Return JSON response with appropriate headers for download
+    return Response(
+        content=json.dumps(export_data, indent=2),
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f"attachment; filename=workout_plan_{plan_id}.json"
+        }
+    )
+
+@router.post("/import", response_model=WorkoutPlanResponse)
+async def import_workout_plan(
+    file: UploadFile = File(...),
+    weight_unit: str = Form("kg"),  # Add weight_unit parameter with Form dependency
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Import a workout plan from a JSON file.
+    
+    Parameters:
+    - file: The JSON file containing workout plan data
+    - weight_unit: The unit system used in the file ("kg" or "lbs")
+    """
+    # Read file contents
+    try:
+        contents = await file.read()
+        plan_data = json.loads(contents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid JSON file: {str(e)}"
+        )
+    
+    # Validate required fields
+    required_fields = ["name", "exercises"]
+    for field in required_fields:
+        if field not in plan_data:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Missing required field: {field}"
+            )
+    
+    # Create new workout plan
+    new_plan = WorkoutPlan(
+        name=plan_data["name"],
+        description=plan_data.get("description", ""),
+        days_per_week=plan_data.get("days_per_week", 0),
+        duration_weeks=plan_data.get("duration_weeks", 0),
+        is_public=plan_data.get("is_public", False),
+        owner_id=current_user.id
+    )
+    
+    db.add(new_plan)
+    db.commit()
+    db.refresh(new_plan)
+    
+    # Add exercises to the plan
+    for i, exercise_data in enumerate(plan_data["exercises"]):
+        # Verify exercise exists if exercise_id is provided
+        exercise_id = exercise_data.get("exercise_id")
+        if exercise_id:
+            exercise = db.query(Exercise).filter(Exercise.id == exercise_id).first()
+            if not exercise:
+                # Try to find exercise by name if exercise_name is provided
+                exercise_name = exercise_data.get("exercise_name")
+                if exercise_name:
+                    exercise = db.query(Exercise).filter(Exercise.name == exercise_name).first()
+                
+                # If still not found, skip this exercise or create a new one
+                if not exercise:
+                    # Could either skip or create a placeholder exercise
+                    continue
+                
+                exercise_id = exercise.id
+        else:
+            # Skip exercises without an ID
+            continue
+        
+        # Extract target weight and perform unit conversion if needed
+        target_weight = exercise_data.get("target_weight", 0)
+        
+        # Get per-exercise weight unit if specified, otherwise use the form parameter
+        ex_weight_unit = exercise_data.get("weight_unit", weight_unit)
+        
+        # Always convert to kg for storage in the database
+        converted_weight = convert_weight(target_weight, ex_weight_unit, "kg")
+        
+        # Create plan exercise with converted weight
+        db_plan_exercise = PlanExercise(
+            workout_plan_id=new_plan.id,
+            exercise_id=exercise_id,
+            sets=exercise_data.get("sets", 3),
+            reps=exercise_data.get("reps", 10),
+            rest_seconds=exercise_data.get("rest_seconds", 60),
+            target_weight=converted_weight,  # Use the converted weight
+            order=exercise_data.get("order", i),
+            day_of_week=exercise_data.get("day_of_week"),
+            progression_type=exercise_data.get("progression_type", "weight"),
+            progression_value=exercise_data.get("progression_value", 2.5),
+            progression_threshold=exercise_data.get("progression_threshold", 2)
+        )
+        
+        db.add(db_plan_exercise)
+    
+    db.commit()
+    db.refresh(new_plan)
+    
+    return new_plan 

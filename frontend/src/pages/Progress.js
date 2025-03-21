@@ -160,29 +160,39 @@ const Progress = () => {
         setIsLoading(prev => ({ ...prev, progress: true }));
         const response = await progressApi.getExerciseProgress(selectedExercise);
         
-        let progressData = response.data;
+        const apiData = response.data;
+        
+        // Process data from API response - extract data points and dates
+        const dataPoints = apiData.data || [];
+        
+        // Create separate arrays for dates and values
+        const dates = dataPoints.map(item => item.date);
+        const weightValues = dataPoints.map(item => item.value);
         
         // Convert weights to preferred unit if using imperial
-        if (weightUnit === 'lb') {
-          progressData = {
-            ...progressData,
-            weights: progressData.weights.map(w => convertToPreferred(w, 'kg')),
-            chartData: {
-              ...progressData.chartData,
-              datasets: progressData.chartData.datasets.map(dataset => ({
-                ...dataset,
-                data: dataset.data.map(value => convertToPreferred(value, 'kg'))
-              }))
-            }
-          };
-        }
+        const convertedWeights = weightUnit === 'lb' 
+          ? weightValues.map(weight => convertToPreferred(weight, 'kg'))
+          : weightValues;
+
+        // Create formatted weight progress data for the charts
+        const formattedWeightProgress = dataPoints.map((item, index) => ({
+          date: item.date,
+          weight: convertedWeights[index]
+        }));
+        
+        // Format volume data (for now using the same data points)
+        // In the future, you might want to make a separate API call for volume data
+        const formattedVolumeProgress = dataPoints.map(item => ({
+          date: item.date,
+          volume: item.value // This should be changed to actual volume data when available
+        }));
         
         setProgressData(prev => ({
           ...prev,
-          weightProgress: progressData.weights || [],
-          volumeProgress: progressData.volume_progress || [],
-          weights: progressData.weights || [],
-          chartData: progressData.chartData || {}
+          weightProgress: formattedWeightProgress,
+          volumeProgress: formattedVolumeProgress,
+          weights: convertedWeights,
+          dates: dates
         }));
       } catch (error) {
         console.error('Error fetching exercise progress:', error);
@@ -241,11 +251,11 @@ const Progress = () => {
     }
 
     const data = {
-      labels: progressData.weightProgress.map(item => formatDate(item.date)),
+      labels: progressData.dates?.map(date => formatDate(date)) || [],
       datasets: [
         {
           label: `Weight (${weightUnit})`,
-          data: progressData.weights,
+          data: progressData.weights || [],
           fill: false,
           backgroundColor: 'rgba(75,192,192,0.4)',
           borderColor: 'rgba(75,192,192,1)',
@@ -269,7 +279,7 @@ const Progress = () => {
           callbacks: {
             title: (tooltipItems) => {
               const index = tooltipItems[0].dataIndex;
-              return formatDate(progressData.weightProgress[index].date);
+              return formatDate(progressData.dates[index]);
             }
           }
         }
@@ -313,7 +323,7 @@ const Progress = () => {
     }
 
     const data = {
-      labels: progressData.volumeProgress.map(item => formatDate(item.date)),
+      labels: progressData.dates?.map(date => formatDate(date)) || [],
       datasets: [
         {
           label: 'Volume (weight × reps)',
@@ -336,6 +346,14 @@ const Progress = () => {
         title: {
           display: true,
           text: 'Volume Progress Over Time'
+        },
+        tooltip: {
+          callbacks: {
+            title: (tooltipItems) => {
+              const index = tooltipItems[0].dataIndex;
+              return formatDate(progressData.dates[index]);
+            }
+          }
         }
       },
       scales: {

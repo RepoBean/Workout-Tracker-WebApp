@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 
 from app.database import get_db
 from app.models.models import Exercise, User
 from app.schemas.exercise import ExerciseCreate, ExerciseUpdate, ExerciseResponse
 from app.services.auth import get_current_active_user, get_current_admin_user
+import json
+from fastapi import Response, File, UploadFile
 
 router = APIRouter()
 
@@ -76,6 +78,52 @@ async def get_exercises(
     ).offset(skip).limit(limit).all()
     
     return exercises
+
+@router.get("/export")
+async def export_exercises_library(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Export all available exercises (system exercises and user-created) in a format 
+    that's easy to use for creating workout plans.
+    """
+    try:
+        # Get exercises (system exercises + user's own exercises)
+        print(f"[Export] Starting exercise export for user ID: {current_user.id}")
+        exercises = db.query(Exercise).filter(
+            (Exercise.is_system == True) | (Exercise.created_by == current_user.id)
+        ).order_by(Exercise.name).all()
+        
+        print(f"[Export] Found {len(exercises)} exercises to export")
+        
+        # Create a simplified list of exercises with key information
+        export_data = []
+        for exercise in exercises:
+            # Ensure all values are serializable
+            exercise_data = {
+                "id": exercise.id,
+                "name": exercise.name or "",
+                "muscle_group": exercise.muscle_group or "",
+                "category": exercise.category or "",
+                "equipment": exercise.equipment or "",
+                "description": exercise.description or ""
+            }
+            export_data.append(exercise_data)
+        
+        # Return JSON response directly - let FastAPI handle the serialization
+        return export_data
+
+    except Exception as e:
+        # Log the error for debugging
+        print(f"Error exporting exercises: {str(e)}")
+        print(f"Exception type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to export exercises: {str(e)}"
+        )
 
 @router.get("/{exercise_id}", response_model=ExerciseResponse)
 async def get_exercise(
@@ -270,4 +318,93 @@ async def get_muscle_groups(
     Get a list of all muscle groups.
     """
     muscle_groups = db.query(Exercise.muscle_group).distinct().filter(Exercise.muscle_group != None).all()
-    return [mg[0] for mg in muscle_groups] 
+    return [mg[0] for mg in muscle_groups]
+
+@router.post("/import", response_model=Dict[str, Any])
+async def import_exercises(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Import multiple exercises from a JSON file.
+    The file should contain an array of exercise objects.
+    """
+    # Read file contents
+    try:
+        contents = await file.read()
+        exercises_data = json.loads(contents)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid JSON file: {str(e)}"
+        )
+    
+    # Validate that the content is an array
+    if not isinstance(exercises_data, list):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file format. Expected an array of exercises."
+        )
+    
+    # Results tracking
+    results = {
+        "success": 0,
+        "failed": 0,
+        "failed_exercises": []
+    }
+    
+    # Process each exercise
+    for exercise_data in exercises_data:
+        try:
+            # Skip if name is missing
+            if not exercise_data.get("name"):
+                results["failed"] += 1
+                results["failed_exercises"].append({
+                    "name": exercise_data.get("name") or "Unknown",
+                    "reason": "Missing name field"
+                })
+                continue
+            
+            # Check if exercise with same name already exists
+            existing_exercise = db.query(Exercise).filter(
+                Exercise.name == exercise_data["name"]
+            ).first()
+            
+            if existing_exercise:
+                results["failed"] += 1
+                results["failed_exercises"].append({
+                    "name": exercise_data["name"],
+                    "reason": "Exercise with this name already exists"
+                })
+                continue
+            
+            # Create new exercise
+            new_exercise = Exercise(
+                name=exercise_data["name"],
+                description=exercise_data.get("description", ""),
+                category=exercise_data.get("category", ""),
+                equipment=exercise_data.get("equipment", ""),
+                muscle_group=exercise_data.get("muscle_group", ""),
+                instructions=exercise_data.get("instructions", ""),
+                is_system=False,
+                created_by=current_user.id
+            )
+            
+            db.add(new_exercise)
+            db.commit()
+            results["success"] += 1
+            
+        except Exception as e:
+            # If any error occurs with this exercise, log it and continue
+            results["failed"] += 1
+            results["failed_exercises"].append({
+                "name": exercise_data.get("name") or "Unknown",
+                "reason": str(e)
+            })
+            db.rollback()  # Roll back the failed transaction
+    
+    return {
+        "message": f"Import complete: {results['success']} exercises added, {results['failed']} failed",
+        "results": results
+    } 

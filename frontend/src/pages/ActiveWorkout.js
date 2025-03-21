@@ -79,6 +79,7 @@ const ActiveWorkout = () => {
   const [completedSets, setCompletedSets] = useState({});
   const [editValues, setEditValues] = useState({ weight: '', reps: '' });
   const [confirmFinishOpen, setConfirmFinishOpen] = useState(false);
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [workoutTimer, setWorkoutTimer] = useState(0);
   const [timerInterval, setTimerInterval] = useState(null);
@@ -686,6 +687,38 @@ const ActiveWorkout = () => {
     }
   };
 
+  // Cancel the workout
+  const handleCancelClick = () => {
+    setCancelConfirmOpen(true);
+  };
+
+  // Handle the actual cancellation
+  const handleCancelWorkout = async () => {
+    try {
+      await sessionsApi.delete(session.id);
+      
+      setSnackbar({
+        open: true,
+        message: 'Workout cancelled successfully',
+        severity: 'success'
+      });
+      
+      setCancelConfirmOpen(false);
+      
+      // Navigate back to workout sessions after a brief delay
+      setTimeout(() => {
+        navigate('/workout-sessions');
+      }, 1500);
+    } catch (error) {
+      console.error('Error cancelling workout:', error);
+      setSnackbar({
+        open: true,
+        message: 'Failed to cancel workout',
+        severity: 'error'
+      });
+    }
+  };
+
   // Calculate completion percentage
   const calculateCompletion = () => {
     // If session is completed, return 100%
@@ -1203,11 +1236,10 @@ const ActiveWorkout = () => {
           {/* Plate Calculator for barbell exercises with weight */}
           {currentExercise.target_weight > 0 && currentExercise.equipment && 
            (currentExercise.equipment.toLowerCase().includes('barbell') || 
-            ((currentExercise.name && (currentExercise.name.toLowerCase().includes('bench') || 
+            (currentExercise.name && (currentExercise.name.toLowerCase().includes('bench') || 
              currentExercise.name.toLowerCase().includes('squat') || 
              currentExercise.name.toLowerCase().includes('deadlift') || 
              currentExercise.name.toLowerCase().includes('press')))
-            )
            ) && (
             <Grid container>
               <Grid item xs={12}>
@@ -1429,14 +1461,25 @@ const ActiveWorkout = () => {
           </Typography>
         </Box>
         
-        <Button
-          variant="contained"
-          color="primary"
-          endIcon={currentExerciseIndex < session.exercises.length - 1 ? <NextIcon /> : <CheckIcon />}
-          onClick={handleNextExercise}
-        >
-          {currentExerciseIndex < session.exercises.length - 1 ? 'Next Exercise' : 'Finish Workout'}
-        </Button>
+        <Box>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={handleCancelClick}
+            sx={{ mr: 2 }}
+          >
+            Cancel Workout
+          </Button>
+          
+          <Button
+            variant="contained"
+            color="primary"
+            endIcon={currentExerciseIndex < session.exercises.length - 1 ? <NextIcon /> : <CheckIcon />}
+            onClick={handleNextExercise}
+          >
+            {currentExerciseIndex < session.exercises.length - 1 ? 'Next Exercise' : 'Finish Workout'}
+          </Button>
+        </Box>
       </Box>
       
       {/* Finish Workout Dialog */}
@@ -1454,6 +1497,25 @@ const ActiveWorkout = () => {
           <Button onClick={() => setConfirmFinishOpen(false)}>Cancel</Button>
           <Button onClick={handleFinishWorkout} variant="contained" color="primary">
             Finish Workout
+          </Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* Cancel Workout Dialog */}
+      <Dialog
+        open={cancelConfirmOpen}
+        onClose={() => setCancelConfirmOpen(false)}
+      >
+        <DialogTitle>Cancel Workout</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to cancel this workout? This will completely remove it from your workout history.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCancelConfirmOpen(false)}>No, Continue</Button>
+          <Button onClick={handleCancelWorkout} color="error" variant="contained">
+            Yes, Cancel Workout
           </Button>
         </DialogActions>
       </Dialog>
