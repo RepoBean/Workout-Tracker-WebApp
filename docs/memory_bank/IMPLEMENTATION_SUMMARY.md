@@ -149,6 +149,28 @@ The sequential workout progression feature allows users to follow their workout 
 - Missed workout days don't disrupt the program flow
 - Users can workout on any schedule that suits them while maintaining proper program progression
 
+## Active Plan Implementation
+
+### Key Features
+- Modified User model to include `active_plan_id` field referencing the active workout plan
+- Updated API endpoint `/api/plans/{plan_id}/activate` to set the user's active plan 
+- Modified plan response schema to include `is_active_for_current_user` flag
+- Allows multiple users to have the same workout plan as their active plan
+- Each user's progress through a plan is tracked independently
+- Improves UI by clearly showing which plan is active for the current user
+
+### Benefits
+- More intuitive user experience with personalized "Active" indicators
+- Supports community features where popular plans can be used by many users simultaneously
+- Maintains individual progress tracking for each user
+- Aligns with typical workout app behavior where users select programs from a library
+
+### Implementation Details
+- Added foreign key from users.active_plan_id to workout_plans.id
+- Modified activate endpoint to check for plan access (own plan or public)
+- Updated the "next" workout endpoint to use the user's active_plan_id
+- Ensured backward compatibility with existing frontend code
+
 ## Database Implementation
 
 ### Completed Components

@@ -149,7 +149,8 @@ async def get_workout_plans(
             "owner_id": plan.owner_id,
             "created_at": plan.created_at,
             "exercises": [],  # We don't need the full exercise details in the list view
-            "exercises_count": exercise_count
+            "exercises_count": exercise_count,
+            "is_active_for_current_user": plan.id == current_user.active_plan_id
         }
         plan_responses.append(plan_dict)
     
@@ -162,18 +163,27 @@ async def get_next_workout_plan(
 ):
     """
     Get the currently active workout plan for the user.
-    Returns the first plan with is_active=True for the user.
     """
-    # Check for active plans where the user is the owner
-    active_plan = db.query(WorkoutPlan).filter(
-        WorkoutPlan.owner_id == current_user.id,
-        WorkoutPlan.is_active == True
-    ).first()
-    
-    if not active_plan:
+    # Check if user has an active plan
+    if not current_user.active_plan_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No active workout plan found"
+        )
+    
+    # Get the active plan
+    active_plan = db.query(WorkoutPlan).filter(
+        WorkoutPlan.id == current_user.active_plan_id
+    ).first()
+    
+    if not active_plan:
+        # Reset user's active plan if the plan was deleted
+        current_user.active_plan_id = None
+        db.commit()
+        
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Active workout plan not found"
         )
     
     # Count the exercises in the plan
@@ -183,6 +193,9 @@ async def get_next_workout_plan(
     
     # Set the exercises_count field
     active_plan.exercises_count = exercise_count
+    
+    # Set is_active_for_current_user flag
+    active_plan.is_active_for_current_user = True
     
     # Load exercise details for the plan exercises
     for plan_exercise in active_plan.exercises:
@@ -228,6 +241,9 @@ async def get_workout_plan(
     
     # Set the exercises_count field
     plan.exercises_count = exercise_count
+    
+    # Set is_active_for_current_user flag
+    plan.is_active_for_current_user = plan.id == current_user.active_plan_id
     
     # Load exercise details for the plan exercises
     for plan_exercise in plan.exercises:
@@ -632,7 +648,7 @@ async def activate_workout_plan(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Activate a workout plan.
+    Activate a workout plan for the current user.
     Only one plan can be active at a time per user.
     """
     # Get the plan to activate
@@ -644,23 +660,19 @@ async def activate_workout_plan(
             detail="Workout plan not found"
         )
     
-    # Check if user owns this plan
-    if db_plan.owner_id != current_user.id:
+    # Check if user has access to this plan (own or public)
+    if db_plan.owner_id != current_user.id and not db_plan.is_public:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to activate this workout plan"
         )
     
-    # Deactivate all other plans for this user
-    db.query(WorkoutPlan).filter(
-        WorkoutPlan.owner_id == current_user.id,
-        WorkoutPlan.id != plan_id
-    ).update({"is_active": False})
-    
-    # Activate this plan
-    db_plan.is_active = True
+    # Set as the user's active plan
+    current_user.active_plan_id = plan_id
     db.commit()
-    db.refresh(db_plan)
+    
+    # Add is_active_for_current_user flag for response
+    db_plan.is_active_for_current_user = True
     
     return db_plan
 

@@ -37,13 +37,17 @@ Data format consistency is crucial between frontend and backend:
 
 ### Active Workout Plan Logic
 
-The active workout plan functionality should:
+The active workout plan functionality works as follows:
 
-1. Allow setting any workout plan as "active" via API endpoint
-2. Ensure only one plan can be active at a time per user
-3. Deactivate any previously active plan when a new one is activated
-4. Display the active plan on the dashboard as "Next Workout"
-5. Retrieve active plan via `/api/plans/next` endpoint
+1. Users can set any workout plan (that they own or is public) as their active plan
+2. Each user can have only one active plan at a time
+3. Multiple users can have the same workout plan set as their active plan
+4. The active plan is used as the default for starting new workouts
+5. The active plan is associated directly with the user via the `active_plan_id` field
+6. The UI displays active status based on whether a plan is active for the current user
+7. The `/api/plans/next` endpoint returns the user's active plan
+
+This design allows multiple users to independently progress through the same workout program, with each user's progress tracked separately in their workout sessions.
 
 ### Sequential Workout Progression Logic
 

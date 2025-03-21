@@ -79,6 +79,7 @@ class WorkoutPlanResponse(WorkoutPlanBase):
     created_at: datetime
     exercises: List[PlanExerciseResponse] = []
     exercises_count: Optional[int] = None
+    is_active_for_current_user: bool = False
     
     class Config:
         from_attributes = True

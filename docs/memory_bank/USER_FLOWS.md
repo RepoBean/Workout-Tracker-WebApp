@@ -69,6 +69,16 @@
 4. System creates sharing record
 5. Recipients receive notification (if applicable)
 
+### Activate Workout Plan Flow
+1. User navigates to a workout plan (either their own or a public plan)
+2. User clicks "Set as Active" button
+3. System sets this plan as the user's active plan
+4. User is shown confirmation that the plan is now active
+5. The active plan is displayed on the dashboard as "Next Workout"
+6. When starting a new workout, the active plan is selected by default
+
+Note: Multiple users can have the same workout plan set as their active plan, with each user's progress tracked individually.
+
 ## Workout Session Flow
 
 ### Start Workout Session Flow

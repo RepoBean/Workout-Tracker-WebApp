@@ -50,6 +50,8 @@ Stores user account information.
 | created_at        | TIMESTAMP | NOT NULL, DEFAULT NOW()   | Account creation timestamp         |
 | last_login        | TIMESTAMP |                           | Last login timestamp               |
 | profile_picture   | VARCHAR   |                           | URL to profile picture (optional)  |
+| settings          | TEXT      |                           | User settings as JSON (optional)   |
+| active_plan_id    | INTEGER   | FOREIGN KEY (workout_plans.id) | User's currently active workout plan |
 
 ### `exercises`
 Stores exercise definitions.
@@ -171,6 +173,7 @@ Tracks workout plans shared between users.
 
 - A User can create many Workout Plans (one-to-many)
 - A User can have many Workout Sessions (one-to-many)
+- A User can have one active Workout Plan (many-to-one)
 - A Workout Plan consists of many Plan Exercises (one-to-many)
 - An Exercise can be used in many Plan Exercises (one-to-many)
 - A Workout Session consists of many Session Exercises (one-to-many)

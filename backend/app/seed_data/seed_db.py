@@ -20,7 +20,7 @@ import bcrypt
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal, engine, Base
-from app.models.models import User, Exercise, WorkoutPlan, PlanExercise
+from app.models.models import User, Exercise, WorkoutPlan, PlanExercise, ExerciseSet, SessionExercise, WorkoutSession, SharedPlan
 from app.seed_data.exercise_library import (
     CHEST_EXERCISES, BACK_EXERCISES, LEGS_EXERCISES, 
     SHOULDERS_EXERCISES, ARMS_EXERCISES, CORE_EXERCISES
@@ -43,6 +43,10 @@ def create_tables():
 def clear_tables(db: Session):
     """Clear all data from the tables."""
     # Delete in order to respect foreign key constraints
+    db.query(ExerciseSet).delete()
+    db.query(SessionExercise).delete()
+    db.query(WorkoutSession).delete()
+    db.query(SharedPlan).delete()
     db.query(PlanExercise).delete()
     db.query(WorkoutPlan).delete()
     db.query(Exercise).delete()

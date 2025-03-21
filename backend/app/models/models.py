@@ -16,9 +16,11 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True)
     profile_picture = Column(String, nullable=True)
     settings = Column(Text, nullable=True)  # JSON string for user settings
+    active_plan_id = Column(Integer, ForeignKey("workout_plans.id"), nullable=True)
     
     # Relationships
-    workout_plans = relationship("WorkoutPlan", back_populates="owner")
+    workout_plans = relationship("WorkoutPlan", back_populates="owner", foreign_keys="WorkoutPlan.owner_id")
+    active_plan = relationship("WorkoutPlan", foreign_keys=[active_plan_id])
     workout_sessions = relationship("WorkoutSession", back_populates="user")
     created_exercises = relationship("Exercise", back_populates="created_by_user")
     shared_plans_owned = relationship("SharedPlan", foreign_keys="SharedPlan.owner_id", back_populates="owner")
@@ -63,7 +65,7 @@ class WorkoutPlan(Base):
     duration_weeks = Column(Integer, nullable=True)
     
     # Relationships
-    owner = relationship("User", back_populates="workout_plans")
+    owner = relationship("User", back_populates="workout_plans", foreign_keys=[owner_id])
     exercises = relationship("PlanExercise", back_populates="workout_plan", cascade="all, delete-orphan")
     workout_sessions = relationship("WorkoutSession", back_populates="workout_plan")
     shared_plans = relationship("SharedPlan", back_populates="plan", cascade="all, delete-orphan")
