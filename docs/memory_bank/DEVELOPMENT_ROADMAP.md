@@ -85,7 +85,7 @@
 
 ### Data Import/Export
 - [x] Design export endpoints (JSON for plans, CSV for history)
-- [ ] Implement workout plan JSON export
+- [x] Implement workout plan JSON export
 - [x] Add workout plan import functionality
 - [ ] Create workout history CSV export
 - [ ] Implement data backup functionality
@@ -160,8 +160,7 @@
 - [ ] Implement supersets
 - [ ] Add circuit training support
 - [ ] Create HIIT workout templates
-- [ ] Support for video exercise demonstrations
-- [ ] Add custom exercise creation with images
+
 
 ### Social Features
 - [x] Implement user profiles

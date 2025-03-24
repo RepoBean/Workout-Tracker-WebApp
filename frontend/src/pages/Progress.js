@@ -60,6 +60,7 @@ const Progress = () => {
   const { weightUnit, convertToPreferred } = useUnitSystem();
   const [activeTab, setActiveTab] = useState(0);
   const [exercises, setExercises] = useState([]);
+  const [exercisesWithData, setExercisesWithData] = useState([]);
   const [selectedExercise, setSelectedExercise] = useState('');
   const [progressData, setProgressData] = useState({
     weightProgress: [],
@@ -85,7 +86,7 @@ const Progress = () => {
         
         if (response.data && response.data.length > 0) {
           setExercises(response.data);
-          setSelectedExercise(response.data[0].id);
+          // We'll set selected exercise after we know which ones have data
         }
       } catch (error) {
         console.error('Error fetching exercises:', error);
@@ -98,12 +99,77 @@ const Progress = () => {
     fetchExercises();
   }, []);
 
-  // Fetch workout frequency data
+  // Add a new effect to identify exercises with data
+  useEffect(() => {
+    const fetchExercisesWithData = async () => {
+      try {
+        // Use personal records to identify exercises with data
+        const response = await progressApi.getPersonalRecords();
+        
+        if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+          console.log('Personal records data for filtering exercises:', response.data);
+          
+          // Extract unique exercise IDs from the personal records
+          const exerciseIds = new Set();
+          
+          response.data.forEach(record => {
+            // Updated extraction based on actual data structure
+            if (record.exercise && record.exercise.id) {
+              exerciseIds.add(record.exercise.id);
+            }
+          });
+          
+          // Filter exercises list to only those with data
+          const filteredExercises = exercises.filter(ex => 
+            exerciseIds.has(ex.id)
+          );
+          
+          console.log('Filtered exercises with data:', filteredExercises);
+          
+          setExercisesWithData(filteredExercises);
+          
+          // Set the first exercise with data as selected
+          if (filteredExercises.length > 0) {
+            setSelectedExercise(filteredExercises[0].id);
+          } else if (exercises.length > 0) {
+            // If no exercises with data, default to first exercise
+            setSelectedExercise(exercises[0].id);
+          }
+        } else {
+          // If no personal records, just use all exercises
+          setExercisesWithData(exercises);
+          if (exercises.length > 0) {
+            setSelectedExercise(exercises[0].id);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching exercises with data:', error);
+        // Fall back to all exercises
+        setExercisesWithData(exercises);
+        if (exercises.length > 0) {
+          setSelectedExercise(exercises[0].id);
+        }
+      }
+    };
+
+    if (exercises.length > 0) {
+      fetchExercisesWithData();
+    }
+  }, [exercises]);
+
+  // Fetch workout frequency data with improved error handling
   useEffect(() => {
     const fetchFrequencyData = async () => {
       try {
         setIsLoading(prev => ({ ...prev, frequency: true }));
         const response = await progressApi.getWorkoutFrequency(periodFilter);
+        
+        console.log("Workout frequency data:", response.data); // Debug to see the actual data
+        
+        if (!response.data) {
+          console.error('No workout frequency data received');
+          return;
+        }
         
         setProgressData(prev => ({
           ...prev,
@@ -119,17 +185,43 @@ const Progress = () => {
     fetchFrequencyData();
   }, [periodFilter]);
 
-  // Fetch personal records
+  // Fetch personal records with improved error handling
   useEffect(() => {
     const fetchPersonalRecords = async () => {
       try {
         setIsLoading(prev => ({ ...prev, records: true }));
         const response = await progressApi.getPersonalRecords();
         
-        let records = response.data;
+        console.log("Personal records data:", response.data); // Debug to see the actual data
+        
+        if (!response.data || !Array.isArray(response.data)) {
+          console.error('Invalid personal records data format:', response.data);
+          setProgressData(prev => ({
+            ...prev,
+            personalRecords: []
+          }));
+          return;
+        }
+        
+        // Transform the data to match the expected format for display
+        let records = response.data.map(record => {
+          // Check if all required data exists
+          if (record.exercise && record.max_weight && record.max_reps) {
+            return {
+              exercise_name: record.exercise.name,
+              exercise_id: record.exercise.id,
+              weight: record.max_weight.weight,
+              reps: record.max_reps.reps,
+              date: record.max_weight.date || record.max_reps.date
+            };
+          }
+          return null;
+        }).filter(Boolean); // Remove any null entries
+        
+        console.log("Transformed personal records:", records);
         
         // Convert weights if needed
-        if (weightUnit === 'lb') {
+        if (weightUnit === 'lb' && records.length > 0) {
           records = records.map(record => ({
             ...record,
             weight: convertToPreferred(record.weight, 'kg')
@@ -484,7 +576,7 @@ const Progress = () => {
                 </TableCell>
                 <TableCell align="right">
                   <Typography variant="body2" fontWeight="bold">
-                    {record.weight} {weightUnit}
+                    {Math.round(record.weight)} {weightUnit}
                   </Typography>
                 </TableCell>
                 <TableCell align="right">{record.reps}</TableCell>
@@ -507,7 +599,11 @@ const Progress = () => {
       );
     }
 
-    const { total, this_week, this_month } = progressData.workoutFrequency || {};
+    // Update how we extract total, this_week, and this_month from the data
+    const { statistics } = progressData.workoutFrequency || {};
+    const total = statistics ? statistics.total_workouts : 0;
+    const this_month = statistics ? statistics.total_workouts : 0; // For now, showing the same total
+    const this_week = statistics ? Math.round(statistics.avg_workouts_per_week) : 0;
 
     return (
       <Grid container spacing={3}>
@@ -563,6 +659,44 @@ const Progress = () => {
           </Paper>
         </Grid>
       </Grid>
+    );
+  };
+
+  // Update the Select component in the Exercise Progress section to use exercisesWithData
+  const renderExerciseSelector = () => {
+    if (isLoading.exercises) {
+      return (
+        <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+          <CircularProgress size={24} />
+        </Box>
+      );
+    }
+
+    return (
+      <FormControl fullWidth>
+        <InputLabel id="exercise-select-label">Select Exercise</InputLabel>
+        <Select
+          labelId="exercise-select-label"
+          id="exercise-select"
+          value={selectedExercise}
+          label="Select Exercise"
+          onChange={handleExerciseChange}
+        >
+          {exercisesWithData.length > 0 ? (
+            exercisesWithData.map((exercise) => (
+              <MenuItem key={exercise.id} value={exercise.id}>
+                {exercise.name}
+              </MenuItem>
+            ))
+          ) : (
+            exercises.map((exercise) => (
+              <MenuItem key={exercise.id} value={exercise.id}>
+                {exercise.name}
+              </MenuItem>
+            ))
+          )}
+        </Select>
+      </FormControl>
     );
   };
 
@@ -664,22 +798,7 @@ const Progress = () => {
         </Typography>
 
         <Box sx={{ mb: 3 }}>
-          <FormControl fullWidth>
-            <InputLabel id="exercise-select-label">Select Exercise</InputLabel>
-            <Select
-              labelId="exercise-select-label"
-              id="exercise-select"
-              value={selectedExercise}
-              label="Select Exercise"
-              onChange={handleExerciseChange}
-            >
-              {exercises.map((exercise) => (
-                <MenuItem key={exercise.id} value={exercise.id}>
-                  {exercise.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          {renderExerciseSelector()}
         </Box>
 
         <Paper>
