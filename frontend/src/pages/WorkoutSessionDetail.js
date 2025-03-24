@@ -148,7 +148,8 @@ const WorkoutSessionDetail = () => {
     session.exercises.forEach(exercise => {
       if (exercise.sets) {
         exercise.sets.forEach(set => {
-          if (set.completed && set.weight && set.reps) {
+          // Only check that weight and reps are valid values, don't check completion status
+          if (set.weight && set.reps) {
             totalWeight += (set.weight * set.reps);
           }
         });
@@ -167,7 +168,8 @@ const WorkoutSessionDetail = () => {
     session.exercises.forEach(exercise => {
       if (exercise.sets) {
         exercise.sets.forEach(set => {
-          if (set.completed && set.reps) {
+          // Only check that reps is a valid value, don't check completion status
+          if (set.reps) {
             totalReps += set.reps;
           }
         });

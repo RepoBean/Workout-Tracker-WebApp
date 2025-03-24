@@ -142,7 +142,8 @@ export const UnitSystemProvider = ({ children }) => {
   const calculatePlates = (targetWeight) => {
     if (!targetWeight) return [];
     
-    const numValue = Number(targetWeight);
+    // Convert to number and round to nearest 0.5 to avoid floating point issues
+    const numValue = Math.round(Number(targetWeight) * 2) / 2;
     
     // Define standard plates and bar weight based on unit system
     const barWeight = unitSystem === 'metric' ? 20 : 45; // 20kg or 45lb bar
@@ -158,22 +159,26 @@ export const UnitSystemProvider = ({ children }) => {
     }
     
     // Calculate weight to be added with plates (each side)
-    const weightToAdd = (numValue - barWeight) / 2;
+    const weightToAdd = Math.round((numValue - barWeight) / 2 * 10) / 10;
+    
+    console.log(`Calculating plates for ${numValue} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+    console.log(`Bar weight: ${barWeight}, weight to add per side: ${weightToAdd}`);
     
     // Calculate plates needed (greedy algorithm)
     const plates = [];
     let remainingWeight = weightToAdd;
     
     availablePlates.forEach(plate => {
-      while (remainingWeight >= plate) {
+      while (remainingWeight >= plate - 0.01) { // Add a small tolerance for floating point issues
         plates.push(plate);
-        remainingWeight -= plate;
+        remainingWeight = Math.round((remainingWeight - plate) * 100) / 100; // Round to avoid floating point issues
+        console.log(`Added ${plate} plate, remaining: ${remainingWeight}`);
       }
     });
     
     // If we couldn't match exactly, round to nearest plate configuration
     if (remainingWeight > 0 && plates.length > 0) {
-      // We're close enough to display what we have
+      console.log(`Couldn't match exactly, remaining weight: ${remainingWeight}`);
     }
     
     return plates;

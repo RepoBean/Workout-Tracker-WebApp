@@ -20,20 +20,23 @@ const PlateCalculator = ({ targetWeight }) => {
   // Get bar weight based on unit system
   const barWeight = unitSystem === 'metric' ? 20 : 45;
   
+  // Round target weight to nearest 0.5 or 1.0 to avoid floating point issues
+  const roundedWeight = Math.round(targetWeight * 2) / 2;
+  
   // Calculate plates needed
-  const plates = calculatePlates(targetWeight);
+  const plates = calculatePlates(roundedWeight);
   
   // If no plates needed or weight less than bar
-  if ((!targetWeight || targetWeight <= barWeight) && plates.length === 0) {
+  if ((!roundedWeight || roundedWeight <= barWeight) && plates.length === 0) {
     return (
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
         <Typography variant="subtitle2" align="center" color="text.secondary" gutterBottom>
           Plate Calculator
         </Typography>
         <Typography variant="body2" align="center" color="text.secondary">
-          {!targetWeight || targetWeight === 0 
+          {!roundedWeight || roundedWeight === 0 
             ? 'No weight specified'
-            : `Weight (${targetWeight} ${weightUnit}) is less than or equal to bar weight (${barWeight} ${weightUnit})`}
+            : `Weight (${roundedWeight} ${weightUnit}) is less than or equal to bar weight (${barWeight} ${weightUnit})`}
         </Typography>
       </Paper>
     );
@@ -59,6 +62,9 @@ const PlateCalculator = ({ targetWeight }) => {
     }
   };
 
+  // Calculate total plate weight (just one side)
+  const totalPlateWeight = plates.reduce((acc, weight) => acc + weight, 0);
+
   return (
     <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
       <Typography variant="subtitle2" align="center" gutterBottom>
@@ -66,7 +72,7 @@ const PlateCalculator = ({ targetWeight }) => {
       </Typography>
       
       <Typography variant="body2" align="center" sx={{ mb: 2 }} color="text.secondary">
-        {targetWeight} {weightUnit} = {barWeight} {weightUnit} bar + {plates.reduce((acc, weight) => acc + weight * 2, 0)} {weightUnit} plates
+        {roundedWeight} {weightUnit} = {barWeight} {weightUnit} bar + {totalPlateWeight * 2} {weightUnit} plates ({totalPlateWeight} {weightUnit} per side)
       </Typography>
       
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', my: 1 }}>
@@ -90,41 +96,8 @@ const PlateCalculator = ({ targetWeight }) => {
         </Box>
       </Box>
       
-      {/* Plates visualization */}
+      {/* Plates visualization - ONE SIDE ONLY */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'row', my: 1 }}>
-        {/* Left side plates */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-          {plates.map((weight, index) => (
-            <Tooltip key={`left-${index}`} title={`${weight} ${weightUnit}`}>
-              <Box sx={{ 
-                height: Math.max(30, Math.min(80, weight * 1.5)), 
-                width: Math.max(6, Math.min(14, weight / 2)),
-                bgcolor: getPlateColor(weight),
-                border: '1px solid #000',
-                mr: 0.5,
-                borderRadius: '2px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                {weight >= 10 && (
-                  <Typography 
-                    variant="caption" 
-                    sx={{ 
-                      transform: 'rotate(-90deg)', 
-                      fontSize: weight >= 20 ? '0.7rem' : '0.6rem',
-                      fontWeight: 'bold',
-                      color: weight === 5 || weight === 2.5 ? '#000' : '#fff'
-                    }}
-                  >
-                    {weight}
-                  </Typography>
-                )}
-              </Box>
-            </Tooltip>
-          ))}
-        </Box>
-        
         {/* Center collar */}
         <Box sx={{ 
           height: '24px', 
@@ -135,10 +108,10 @@ const PlateCalculator = ({ targetWeight }) => {
           zIndex: 2
         }} />
         
-        {/* Right side plates */}
+        {/* Right side plates only (one side) */}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start' }}>
           {plates.map((weight, index) => (
-            <Tooltip key={`right-${index}`} title={`${weight} ${weightUnit}`}>
+            <Tooltip key={`plate-${index}`} title={`${weight} ${weightUnit}`}>
               <Box sx={{ 
                 height: Math.max(30, Math.min(80, weight * 1.5)), 
                 width: Math.max(6, Math.min(14, weight / 2)),
@@ -181,11 +154,15 @@ const PlateCalculator = ({ targetWeight }) => {
               mr: 0.5 
             }} />
             <Typography variant="caption">
-              {weight} {weightUnit} × {plates.filter(p => p === weight).length * 2}
+              {weight} {weightUnit} ({plates.filter(p => p === weight).length} per side)
             </Typography>
           </Box>
         ))}
       </Box>
+      
+      <Typography variant="caption" align="center" sx={{ display: 'block', mt: 1 }} color="text.secondary">
+        Add plates shown above to each side of the barbell
+      </Typography>
     </Paper>
   );
 };

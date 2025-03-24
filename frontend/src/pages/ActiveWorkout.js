@@ -1387,12 +1387,12 @@ const ActiveWorkout = () => {
           </Box>
           
           {/* Plate Calculator for barbell exercises with weight */}
-          {currentExercise.target_weight > 0 && currentExercise.equipment && 
-           (currentExercise.equipment.toLowerCase().includes('barbell') || 
-            (currentExercise.name && (currentExercise.name.toLowerCase().includes('bench') || 
-             currentExercise.name.toLowerCase().includes('squat') || 
-             currentExercise.name.toLowerCase().includes('deadlift') || 
-             currentExercise.name.toLowerCase().includes('press')))
+          {currentExercise.target_weight > 0 && 
+           (getExerciseProp(currentExercise, 'equipment', '').toLowerCase().includes('barbell') || 
+            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('bench') || 
+            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('squat') || 
+            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('deadlift') || 
+            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('press')
            ) && (
             <Grid container>
               <Grid item xs={12}>
@@ -1406,7 +1406,7 @@ const ActiveWorkout = () => {
                   
                   {/* Pass the proper target weight value based on unit system */}
                   <PlateCalculator 
-                    targetWeight={parseFloat(currentExercise.target_weight)} 
+                    targetWeight={Math.round(parseFloat(currentExercise.target_weight) * 2) / 2} 
                   />
                 </Box>
               </Grid>
