@@ -267,6 +267,20 @@ const WorkoutSessionDetail = () => {
               color={session.status === 'completed' ? 'success' : 'warning'}
               sx={{ mr: 1 }}
             />
+            
+            {/* Add Resume button for in-progress sessions */}
+            {session.status === 'in_progress' && (
+              <Box sx={{ mt: 2 }}>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  startIcon={<FitnessCenterIcon />}
+                  onClick={() => navigate(`/workout-sessions/${session.id}/resume`)}
+                >
+                  Resume Workout
+                </Button>
+              </Box>
+            )}
           </Grid>
           
           <Grid item xs={12} md={6}>

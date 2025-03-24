@@ -85,6 +85,8 @@ const ActiveWorkout = () => {
   const [timerInterval, setTimerInterval] = useState(null);
   const [noExercisesForToday, setNoExercisesForToday] = useState(false);
   const [sessionCreationAttempted, setSessionCreationAttempted] = useState(false);
+  const [sessionStartTime, setSessionStartTime] = useState(null);
+  const [simpleTimer, setSimpleTimer] = useState(0);
   
   // Add a ref to track the previous session ID to avoid re-initializing unnecessarily
   const prevIdRef = React.useRef(id);
@@ -244,6 +246,13 @@ const ActiveWorkout = () => {
                   );
                 }
                 
+                if (response.data.status === 'in_progress' && response.data.start_time) {
+                  console.log('Setting start time for new session:', response.data.start_time);
+                  setSessionStartTime(response.data.start_time);
+                  // Add debug console log
+                  console.log('After setting sessionStartTime:', response.data.start_time);
+                }
+                
                 setSession(response.data);
               } else {
                 // No active plan, create a blank custom workout
@@ -253,6 +262,10 @@ const ActiveWorkout = () => {
                   start_time: new Date().toISOString()
                 });
                 setSession(response.data);
+                if (response.data.start_time) {
+                  console.log('Setting start time for custom workout:', response.data.start_time);
+                  setSessionStartTime(response.data.start_time);
+                }
               }
             } catch (error) {
               console.error('Error fetching active plan:', error);
@@ -263,6 +276,10 @@ const ActiveWorkout = () => {
                 start_time: new Date().toISOString()
               });
               setSession(response.data);
+              if (response.data.start_time) {
+                console.log('Setting start time for fallback custom workout:', response.data.start_time);
+                setSessionStartTime(response.data.start_time);
+              }
             }
           } else {
             // Create a session from the specified plan
@@ -375,17 +392,12 @@ const ActiveWorkout = () => {
           // Store the session status in the ref
           sessionStatusRef.current = response.data.status;
           
-          // Start a timer only for in-progress sessions
-          if (response.data.status === 'in_progress') {
-            console.log('Starting timer for in-progress session');
-            timerStateRef.current.isRunning = true;
-            timerStateRef.current.interval = setInterval(() => {
-              timerStateRef.current.timer += 1;
-              setWorkoutTimer(timerStateRef.current.timer);
-            }, 1000);
-          } else {
-            console.log('Not starting timer for completed session');
-            timerStateRef.current.isRunning = false;
+          // Set the session start time if it's in progress
+          if (response.data.status === 'in_progress' && response.data.start_time) {
+            console.log('Setting session start time for timer:', response.data.start_time);
+            setSessionStartTime(response.data.start_time);
+            // Add debug console log
+            console.log('After setting sessionStartTime for existing session:', response.data.start_time);
           }
           
           console.log('Detailed debugging of API response:', {
@@ -502,11 +514,51 @@ const ActiveWorkout = () => {
     };
   }, [id, isNewSession, planId, sessionCreationAttempted]);
 
-  // Format elapsed time in HH:MM:SS format
-  const formatElapsedTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
+  // Replace the existing timer useEffect with a simpler one that uses simpleTimer
+  useEffect(() => {
+    // Only run this for in-progress sessions
+    if (!session || session.status !== 'in_progress') return;
+    
+    console.log('Starting timer with sessionStartTime:', sessionStartTime);
+    
+    // Calculate the initial elapsed time if we have a start time
+    if ((sessionStartTime || session?.start_time) && simpleTimer === 0) {
+      const startTimeToUse = sessionStartTime || session.start_time;
+      console.log('Using start time for timer calculation:', startTimeToUse);
+      
+      const start = new Date(startTimeToUse);
+      const now = new Date();
+      const initialElapsedSeconds = Math.floor((now - start) / 1000);
+      console.log('Initializing timer with elapsed seconds:', initialElapsedSeconds);
+      
+      // Set the initial timer value
+      setSimpleTimer(initialElapsedSeconds);
+      
+      // If we're using session.start_time as fallback, update sessionStartTime state
+      if (!sessionStartTime && session.start_time) {
+        console.log('Updating sessionStartTime from session.start_time:', session.start_time);
+        setSessionStartTime(session.start_time);
+      }
+    }
+    
+    // Start a simple counter that increments every second
+    const interval = setInterval(() => {
+      setSimpleTimer(prev => prev + 1);
+    }, 1000);
+    
+    // Clean up the interval when the component unmounts
+    return () => {
+      console.log('Cleaning up simple timer');
+      clearInterval(interval);
+    };
+  }, [session?.status, sessionStartTime, simpleTimer, session?.start_time]); // Added session?.start_time as dependency
+
+  // Update the formatElapsedTime function
+  const formatElapsedTime = () => {
+    // Use simpleTimer directly
+    const h = Math.floor(simpleTimer / 3600);
+    const m = Math.floor((simpleTimer % 3600) / 60);
+    const s = simpleTimer % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
@@ -894,6 +946,13 @@ const ActiveWorkout = () => {
     return exercise?.target_weight ? exercise.target_weight.toString() : '';
   };
 
+  console.log("DEBUG: Current timer state:", {
+    sessionStartTime,
+    formattedTime: formatElapsedTime(),
+    workoutTimer: simpleTimer,
+    sessionStatus: session?.status
+  });
+
   // Render loading state
   if (isLoading) {
     return (
@@ -1082,11 +1141,15 @@ const ActiveWorkout = () => {
             </Typography>
             <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
               <TimerIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
-              <Typography variant="body2">
-                {session.status === 'completed' && session.start_time && session.end_time ? 
-                  `Duration: ${formatDuration(session.start_time, session.end_time)}` : 
-                  `Elapsed Time: ${formatElapsedTime(workoutTimer)}`}
-              </Typography>
+              {session.status === 'completed' && session.start_time && session.end_time ? (
+                <Typography variant="body1">
+                  Duration: {formatDuration(session.start_time, session.end_time)}
+                </Typography>
+              ) : (
+                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
+                  Elapsed Time: {formatElapsedTime()}
+                </Typography>
+              )}
             </Box>
           </Grid>
           <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>

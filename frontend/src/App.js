@@ -111,6 +111,13 @@ function App() {
           </ProtectedRoute>
         } />
         
+        {/* New route for resuming in-progress workouts */}
+        <Route path="/workout-sessions/:id/resume" element={
+          <ProtectedRoute>
+            <ActiveWorkout />
+          </ProtectedRoute>
+        } />
+        
         {/* Modified route for viewing workout history */}
         <Route path="/workout-sessions/:id" element={
           <ProtectedRoute>

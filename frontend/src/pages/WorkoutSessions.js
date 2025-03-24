@@ -32,7 +32,8 @@ import {
   Delete as DeleteIcon,
   Visibility as VisibilityIcon,
   NavigateNext as NextIcon,
-  NavigateBefore as PrevIcon
+  NavigateBefore as PrevIcon,
+  PlayArrow as PlayIcon
 } from '@mui/icons-material';
 import { sessionsApi } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
@@ -174,6 +175,10 @@ const WorkoutSessions = () => {
 
   const handleViewSession = (sessionId) => {
     navigate(`/workout-sessions/${sessionId}`);
+  };
+
+  const handleResumeSession = (sessionId) => {
+    navigate(`/workout-sessions/${sessionId}/resume`);
   };
 
   const handleDeleteClick = (session) => {
@@ -432,10 +437,15 @@ const WorkoutSessions = () => {
                   <TableCell>{displayWeight(session.total_weight)}</TableCell>
                   <TableCell>{session.status}</TableCell>
                   <TableCell>
-                    <IconButton onClick={() => handleViewSession(session.id)}>
+                    <IconButton onClick={() => handleViewSession(session.id)} title="View">
                       <VisibilityIcon />
                     </IconButton>
-                    <IconButton onClick={() => handleDeleteClick(session)}>
+                    {session.status === 'in_progress' && (
+                      <IconButton onClick={() => handleResumeSession(session.id)} title="Resume" color="primary">
+                        <PlayIcon />
+                      </IconButton>
+                    )}
+                    <IconButton onClick={() => handleDeleteClick(session)} title="Delete">
                       <DeleteIcon />
                     </IconButton>
                   </TableCell>
