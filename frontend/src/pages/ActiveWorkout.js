@@ -361,17 +361,17 @@ const ActiveWorkout = () => {
                   const completedExerciseSets = {};
                   if (exercise.sets) {
                     exercise.sets.forEach(set => {
-                      if (set.completed) {
-                        // Convert stored weight to display units if using imperial
-                        const displayWeight = unitSystem === 'imperial' ? 
-                          convertToPreferred(set.weight, 'kg') : set.weight;
-                            
-                        completedExerciseSets[set.set_number] = {
-                          weight: displayWeight,
-                          reps: set.reps,
-                          completed: true
-                        };
-                      }
+                      // IMPORTANT: Don't convert the weight again since it was already converted above
+                      // Just use the weight directly from the set which has been converted once already
+                      completedExerciseSets[set.set_number] = {
+                        weight: set.weight, // Use directly without conversion
+                        reps: set.reps,
+                        completed: true,
+                        fromDatabase: true,
+                        set_id: set.id // Store the set ID to avoid duplicating
+                      };
+                      
+                      console.log(`Initialized set ${set.set_number} for exercise ${exercise.id} with weight: ${set.weight}, reps: ${set.reps}`);
                     });
                   }
                   initialCompletedSets[exercise.id] = completedExerciseSets;
@@ -468,17 +468,17 @@ const ActiveWorkout = () => {
               const completedExerciseSets = {};
               if (exercise.sets) {
                 exercise.sets.forEach(set => {
-                  if (set.completed) {
-                    // Convert stored weight to display units if using imperial
-                    const displayWeight = unitSystem === 'imperial' ? 
-                      convertToPreferred(set.weight, 'kg') : set.weight;
-                      
-                    completedExerciseSets[set.set_number] = {
-                      weight: displayWeight,
-                      reps: set.reps,
-                      completed: true
-                    };
-                  }
+                  // IMPORTANT: Don't convert the weight again since it was already converted above
+                  // Just use the weight directly from the set which has been converted once already
+                  completedExerciseSets[set.set_number] = {
+                    weight: set.weight, // Use directly without conversion
+                    reps: set.reps,
+                    completed: true,
+                    fromDatabase: true,
+                    set_id: set.id // Store the set ID to avoid duplicating
+                  };
+                  
+                  console.log(`Initialized set ${set.set_number} for exercise ${exercise.id} with weight: ${set.weight}, reps: ${set.reps}`);
                 });
               }
               initialCompletedSets[exercise.id] = completedExerciseSets;
@@ -608,7 +608,7 @@ const ActiveWorkout = () => {
     setRestInterval(interval);
   };
 
-  // Handle set completion - Modified to remove special case handling
+  // Handle set completion - Modified to avoid duplication
   const handleCompleteSet = (exerciseId, setNumber, weight, reps, completed = true) => {
     // Find the exercise
     const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
@@ -630,6 +630,11 @@ const ActiveWorkout = () => {
       }
     }
     
+    // Check if this set is already marked as completed from the database
+    const existingSet = completedSets[exerciseId]?.[setNumber];
+    const isAlreadyCompletedInDb = existingSet?.fromDatabase === true;
+    
+    // Update local UI state regardless
     setCompletedSets(prev => {
       const updatedSets = { ...prev };
       if (!updatedSets[exerciseId]) {
@@ -637,16 +642,37 @@ const ActiveWorkout = () => {
       }
       
       updatedSets[exerciseId][setNumber] = {
+        ...existingSet, // Keep existing data if present
         weight: weightToUse,
         reps: repsToUse,
-        completed
+        completed,
+        // If it's already from the database, preserve that flag
+        fromDatabase: isAlreadyCompletedInDb || false
       };
       
       return updatedSets;
     });
     
-    // Save to backend
-    saveSetToBackend(exerciseId, setNumber, weightToUse, repsToUse);
+    // Only save to backend if it's not already in the database or if values have changed
+    if (!isAlreadyCompletedInDb || 
+        existingSet.weight?.toString() !== weightToUse?.toString() || 
+        existingSet.reps?.toString() !== repsToUse?.toString()) {
+      saveSetToBackend(exerciseId, setNumber, weightToUse, repsToUse);
+    } else {
+      console.log(`Set ${setNumber} for exercise ${exerciseId} already exists in database - skipping save`);
+      
+      // Still show success message for better UX
+      setSnackbar({
+        open: true,
+        message: 'Set marked as completed',
+        severity: 'success'
+      });
+      
+      // Start rest timer if rest seconds are defined
+      if (exercise && exercise.rest_seconds) {
+        startRestTimer(exercise.rest_seconds);
+      }
+    }
   };
 
   // Save set data to backend - Modified to remove special case handling
@@ -1188,6 +1214,70 @@ const ActiveWorkout = () => {
         </Stepper>
       )}
 
+      {/* Exercise Navigation Panel - for mobile and better navigation */}
+      {session.status !== 'completed' && (
+        <Paper sx={{ p: 2, mb: 3 }}>
+          <Typography variant="h6" gutterBottom>
+            Exercise Navigation
+          </Typography>
+          <Grid container spacing={1}>
+            {session.exercises.map((exercise, index) => {
+              // Check if this exercise has any completed sets
+              const exerciseCompletedSets = completedSets[exercise.id] || {};
+              const hasCompletedSets = Object.keys(exerciseCompletedSets).length > 0;
+              const isCurrentExercise = index === currentExerciseIndex;
+              
+              return (
+                <Grid item xs={12} sm={6} md={4} key={exercise.id}>
+                  <Paper
+                    elevation={isCurrentExercise ? 3 : 1}
+                    sx={{ 
+                      p: 1.5,
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'pointer',
+                      bgcolor: isCurrentExercise ? 'primary.light' : hasCompletedSets ? 'success.light' : 'background.paper',
+                      '&:hover': {
+                        bgcolor: isCurrentExercise ? 'primary.light' : 'action.hover'
+                      },
+                      borderLeft: '4px solid',
+                      borderLeftColor: isCurrentExercise ? 'primary.main' : hasCompletedSets ? 'success.main' : 'transparent'
+                    }}
+                    onClick={() => setCurrentExerciseIndex(index)}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                      <Box sx={{ mr: 1 }}>
+                        {hasCompletedSets ? (
+                          <CheckIcon sx={{ color: 'success.main' }} />
+                        ) : (
+                          <FitnessCenterIcon color={isCurrentExercise ? 'primary' : 'action'} />
+                        )}
+                      </Box>
+                      <Box sx={{ flexGrow: 1 }}>
+                        <Typography 
+                          variant="body1" 
+                          sx={{ 
+                            fontWeight: isCurrentExercise ? 'bold' : 'normal',
+                            color: isCurrentExercise ? 'primary.dark' : hasCompletedSets ? 'success.dark' : 'text.primary'
+                          }}
+                        >
+                          {getExerciseProp(exercise, 'name')}
+                        </Typography>
+                        {exercise.sets_count > 0 && (
+                          <Typography variant="caption" color="text.secondary">
+                            {hasCompletedSets ? `${Object.keys(exerciseCompletedSets).length}/${exercise.sets_count}` : `0/${exercise.sets_count}`} sets
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  </Paper>
+                </Grid>
+              );
+            })}
+          </Grid>
+        </Paper>
+      )}
+
       {/* Add a back button for completed sessions */}
       {session.status === 'completed' && (
         <Button
@@ -1346,13 +1436,49 @@ const ActiveWorkout = () => {
                       justifyContent: 'space-between',
                       flexWrap: { xs: 'wrap', sm: 'nowrap' },
                       border: isCompleted ? '1px solid' : 'none',
-                      borderColor: 'success.main'
+                      borderColor: 'success.main',
+                      position: 'relative' // Add for absolute positioning of badge
                     }}
                   >
+                    {/* Add badge for previously completed sets */}
+                    {completedSets[currentExercise.id]?.[setNumber]?.fromDatabase && (
+                      <Box 
+                        sx={{ 
+                          position: 'absolute', 
+                          top: 0, 
+                          right: 0, 
+                          bgcolor: 'info.main',
+                          color: 'white',
+                          fontSize: '0.75rem',
+                          fontWeight: 'bold',
+                          px: 1,
+                          py: 0.2,
+                          borderBottomLeftRadius: 4,
+                          borderTopRightRadius: 4
+                        }}
+                      >
+                        Previously Saved
+                      </Box>
+                    )}
+                    
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
                       <FitnessCenterIcon sx={{ mr: 1, color: isCompleted ? 'success.dark' : 'text.secondary' }} />
                       <Typography variant="subtitle1" sx={{ fontWeight: isCompleted ? 'bold' : 'normal' }}>
                         Set {setNumber}
+                        {completedSets[currentExercise.id]?.[setNumber]?.fromDatabase && (
+                          <Typography 
+                            component="span" 
+                            variant="caption" 
+                            sx={{ 
+                              ml: 1, 
+                              display: { xs: 'inline', sm: 'none' }, 
+                              color: 'info.main', 
+                              fontWeight: 'bold'
+                            }}
+                          >
+                            (Previously Saved)
+                          </Typography>
+                        )}
                       </Typography>
                     </Box>
                     
