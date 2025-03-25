@@ -26,11 +26,10 @@ This document summarizes the current implementation status of the Workout Tracke
 
 ### Pending Backend Tasks
 - Add database migrations with Alembic
-- ~~Create seed data for common exercises~~ (Completed)
 - Add password reset functionality
 - Enhance error handling
 - Add more comprehensive input validation
-- ~~Implement comprehensive testing~~ (In progress - Auth endpoint tests completed)
+- Fix failing workout plan activation tests
 
 ### Testing Progress
 - **Backend Testing**: 
@@ -38,7 +37,8 @@ This document summarizes the current implementation status of the Workout Tracke
   - SQLite database configured for tests
   - Test fixtures for database and authentication
   - Authentication endpoint tests implemented
-  - 47% overall code coverage
+  - Workout plan endpoint tests partially implemented (with some failing tests)
+  - 46% overall code coverage (as of June 2024)
 - **Frontend Testing**: Not yet implemented
 
 ## Frontend Implementation
@@ -116,11 +116,32 @@ This document summarizes the current implementation status of the Workout Tracke
 - **react-beautiful-dnd**: For drag-and-drop exercise reordering
 
 ### Pending Frontend Tasks
-- Implement PWA functionality with service workers
+- Complete PWA functionality with service workers
 - Add unit and integration tests
 - Optimize bundle size for production
 - Add more advanced error recovery
 - Implement guided onboarding tour
+
+## Weight Conversion System Improvements
+
+The weight unit conversion system has been refined to address inconsistencies:
+
+1. **Separation of Conversion and Display**:
+   - Conversion functions operate with full precision
+   - Rounding only occurs at display time
+   - Database stores precise values in kg
+
+2. **Standardized Approach**:
+   - Eliminated special case handling for specific exercises
+   - Consistent conversion logic across the application
+   - Clear function responsibilities (conversion vs. display)
+
+3. **UI Consistency**:
+   - Weight displays are consistent across all views
+   - Input and output follow the same conversion rules
+   - User's preferred unit system is respected throughout
+
+See [Weight Conversion System](WEIGHT_CONVERSION_CONSOLIDATED.md) for detailed documentation.
 
 ## Sequential Workout Progression Implementation
 
@@ -181,29 +202,45 @@ The sequential workout progression feature allows users to follow their workout 
 
 ### Pending Database Tasks
 - Implement migrations for schema changes
-- ~~Add seed data~~ (Completed)
 - Configure production database settings
 - Set up backup strategy
 
+## Current Testing Status
+
+Testing is currently in progress with 46% backend code coverage. Authentication endpoints are well-tested, while workout plan functionality has partial coverage with some failing tests. The failing tests are related to the workout plan activation feature, where tests are checking for an `is_active` property directly on workout plans, while the actual implementation uses the user's `active_plan_id` field.
+
+### Test Coverage by Area
+- Authentication: ~97%
+- User Management: ~53%
+- Workout Plans: ~44%
+- Exercises: ~21%
+- Sessions: ~14%
+- Progress: ~13%
+
 ## Next Implementation Steps
 
-1. **Frontend Enhancement Priority**:
-   - Add PWA functionality
-   - Implement comprehensive testing
+1. **Testing Priority**:
+   - Fix failing workout plan activation tests
+   - Add tests for exercise endpoints
+   - Implement session tracking tests
+   - Add progress calculation tests
+
+2. **Frontend Enhancement Priority**:
+   - Complete PWA functionality
+   - Implement testing framework
    - Create onboarding experience for new users
 
-2. **Backend Enhancement Priority**:
+3. **Backend Enhancement Priority**:
    - Implement database migrations with Alembic
-   - ~~Add seed data for common exercises~~ (Completed)
    - Enhance error handling and validation
+   - Fix any issues identified during testing
 
-3. **Infrastructure Priority**:
+4. **Infrastructure Priority**:
    - Set up CI/CD pipeline
    - Configure production environment
    - Implement monitoring and logging
 
-4. **Next Steps**:
-   - Implement mobile-optimized views
-   - Add more comprehensive unit and integration tests
-   - Enhance visualization capabilities for progress tracking
-   - Implement social sharing features 
+5. **Deployment Preparation**:
+   - Finalize database migrations strategy
+   - Document deployment process
+   - Create production configuration 

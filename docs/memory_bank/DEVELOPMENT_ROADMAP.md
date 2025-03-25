@@ -1,6 +1,6 @@
 # Workout Tracker - Development Roadmap
 
-## Phase 1: Project Setup and Core Infrastructure (Week 1)
+## Phase 1: Project Setup and Core Infrastructure (Week 1) ✅
 
 ### Environment Setup
 - [x] Create project directory structure
@@ -27,7 +27,7 @@
 - [x] Implement admin role functionality
 - [ ] Add password reset functionality
 
-## Phase 2: Core Functionality - Exercise & Workout Management (Week 2-3)
+## Phase 2: Core Functionality - Exercise & Workout Management (Week 2-3) ✅
 
 ### Exercise Management
 - [x] Implement CRUD operations for exercises
@@ -44,7 +44,7 @@
 - [x] Create workout plan builder UI
 - [x] Create workout plan detail views
 
-## Phase 3: Workout Session Flow (Week 4-5)
+## Phase 3: Workout Session Flow (Week 4-5) ✅
 
 ### Workout Session UI
 - [x] Implement workout session CRUD operations
@@ -63,7 +63,7 @@
 - [x] Optimize performance for mobile
 - [x] Test on various device sizes
 
-## Phase 4: Data Tracking & Visualization (Week 6-7)
+## Phase 4: Data Tracking & Visualization (Week 6-7) ✅
 
 ### Progress Tracking
 - [x] Implement data aggregation for progress (backend)
@@ -81,7 +81,7 @@
 - [x] Create workout calendar view
 - [x] Add upcoming workout display
 
-## Phase 5: Advanced Features (Week 8-10)
+## Phase 5: Advanced Features (Week 8-10) ✅
 
 ### Data Import/Export
 - [x] Design export endpoints (JSON for plans, CSV for history)
@@ -104,48 +104,48 @@
 - [ ] Add "Add to Home Screen" capability
 - [ ] Optimize for offline-first experience
 
-## Phase 6: Refinement and Testing (Week 11-12)
+## Phase 6: Refinement and Testing (Current Phase) 🔄
 
 ### Testing
-- [x] Write unit tests for backend
-  - [x] Set up pytest configuration
-  - [x] Configure test database (SQLite)
-  - [x] Implement authentication tests
-  - [ ] Complete tests for all API endpoints
-- [x] Create frontend unit tests
-  - [x] Set up Jest and React Testing Library
-  - [x] Implement test utilities and mock services
-  - [x] Add tests for auth components
-  - [x] Add tests for workout plan components
-  - [x] Add tests for exercise components
-- [ ] Create integration tests
-- [ ] Implement end-to-end testing
-- [ ] Perform security testing
-- [ ] Conduct performance testing
+- [x] Set up testing framework for backend (pytest)
+- [x] Implement database testing configuration
+- [x] Create test fixtures for authentication
+- [x] Add tests for authentication endpoints (100%)
+- [x] Add tests for workout plan endpoints (partial)
+- [ ] Fix failing workout plan activation tests
+- [ ] Add tests for exercise endpoints
+- [ ] Add tests for session endpoints
+- [ ] Add tests for progress endpoints
+- [ ] Set up frontend testing framework
+- [ ] Implement component tests
+- [ ] Add end-to-end tests for critical flows
 
-### User Experience Refinement
-- [ ] Gather user feedback
-- [x] Refine UI/UX based on feedback
-- [x] Optimize performance
-- [ ] Add user onboarding tutorials
-- [ ] Implement guided tours
+### Application Refinement
+- [x] Review and improve error handling
+- [x] Optimize database queries
+- [x] Refine mobile user experience
+- [x] Address weight conversion inconsistencies
+- [x] Fix workout plan creation and exercise assignment
+- [ ] Improve workout session flow
+- [ ] Enhance progress visualization
+- [ ] Add comprehensive input validation
 
 ### Documentation
-- [x] Create project requirements documentation
-- [x] Write technical architecture documentation
-- [x] Create database schema documentation
 - [x] Document API endpoints
-- [ ] Add deployment guides
-- [ ] Create user documentation
+- [x] Create user documentation
+- [x] Document database schema
+- [x] Document weight conversion system
+- [ ] Create developer onboarding guide
+- [ ] Document testing approach
 
-## Phase 7: Deployment (Week 13)
+## Phase 7: Deployment and Launch (Planned)
 
-### Production Deployment
-- [ ] Configure production environment
-- [ ] Set up database backups
-- [ ] Configure HTTPS
-- [ ] Implement monitoring
-- [ ] Create deployment automation
+### Deployment
+- [ ] Set up production environment
+- [ ] Configure secure SSL
+- [ ] Implement backup strategy
+- [ ] Set up monitoring
+- [ ] Create deployment documentation
 
 ### Post-Launch
 - [ ] Monitor application performance
@@ -183,65 +183,27 @@
 - [ ] Create API for third-party integrations
 - [ ] Add workout video integration
 
-## Critical Issues and Development Priorities (Updated)
+## Current Testing Status (as of June 2024)
 
-### Core Functionality Issues
+Current backend test coverage is at 46% with 21 tests (18 passing, 3 failing). Authentication endpoints have nearly 100% coverage, while workout plan functionality has partial coverage. The failing tests are related to workout plan activation, where tests are checking for an `is_active` property directly on workout plans while the actual implementation uses a user's `active_plan_id` field.
 
-#### Workout Plan Creation and Exercise Assignment
-- **Current Issue**: Exercise assignment to specific days is counterintuitive
-- **Current Issue**: Days per week selection doesn't allow specifying which days
-- **Current Issue**: UI allows adding exercises to "Unassigned days" which is confusing
-- **Current Issue**: When configuring exercises after selecting a specific day, UI still allows changing the workout day
-- **Improvement Needed**: Allow adding exercises directly to specific days
-- **Improvement Needed**: Add explicit day selection (Mon/Tue/Wed etc.) during plan creation
-- **Improvement Needed**: Remove or clarify the "Unassigned days" option
+### Key Testing Priorities
+1. Fix tests for workout plan activation to match the current implementation
+2. Add coverage for exercise management endpoints
+3. Implement session tracking tests
+4. Add progress calculation endpoint tests
 
-#### Active Workout Session Issues
-- **Current Issue**: Exercise names not displayed during active workout
-- **Current Issue**: No display of total sets/reps or target weight during workout
-- **Current Issue**: Cannot add multiple sets for an exercise
-- **Current Issue**: Weights and reps not auto-populated from plan configuration
-- **Current Issue**: Exercise progression is rigid without ability to navigate between exercises
-- **Fix Required**: Display exercise names prominently during workout
-- **Fix Required**: Show planned sets/reps/weight and allow overriding them
-- **Fix Required**: Implement multiple set tracking per exercise
-- **Fix Required**: Auto-populate weights/reps from workout plan
+## Development Priorities (Next Steps)
 
-#### Exercise Display Problems
-- **Current Issue**: Workout plans page shows "0 exercises" when exercises exist
-- **Current Issue**: Exercise names not clearly displayed on plan detail view
-- **Current Issue**: Dashboard "next workout" section doesn't show exercises
-- **Fix Required**: Review data retrieval and display logic for exercises across the application
+1. Fix failing workout plan activation tests
+2. Complete missing PWA functionality
+3. Implement remaining data export features
+4. Create database migrations
+5. Expand test coverage
+6. Prepare for initial deployment
 
-#### Workout Session Initialization
-- **Current Issue**: "No exercises found" error when starting a workout
-- **Current Issue**: Broken connection between active plans and new workout sessions
-- **Fix Required**: Debug data flow from "start workout" to session initialization
-- **Fix Required**: Ensure exercises from active plan are properly loaded into new sessions
-
-#### Network Connectivity
-- **Current Issue**: Connection refused error when accessing from other devices (localhost:8000/api/auth/login)
-- **Fix Required**: Modify Docker configuration to bind to all interfaces (0.0.0.0)
-- **Fix Required**: Ensure frontend is configured to use correct backend URL for external access
-
-### Development Approach
-
-#### Database Management Strategy
-- For development phase, prioritize recreating the database rather than implementing migrations
-- Update models with needed changes, then drop and recreate database
-- Update seed files to populate with test data
-- Implement proper migrations later when schema stabilizes
-
-#### Immediate Next Steps (Priority Order)
-1. Fix network connectivity issues to enable testing from external devices
-2. Address workout plan creation and exercise assignment flow
-3. Fix exercise display across the application
-4. Correct workout session initialization
-5. Implement proper error handling and user feedback
-6. Then proceed with previously identified priorities (export functionality, PWA features)
-
-#### Deferred Priorities
-- Database migrations implementation (deferred until schema stabilizes)
-- Export functionality (JSON workout plans, CSV history)
-- PWA offline functionality
-- Expanded test coverage 
+### Deferred Priorities
+- Comprehensive frontend testing
+- Database migrations (until schema stabilizes)
+- Advanced PWA offline functionality
+- Integration with third-party services 
