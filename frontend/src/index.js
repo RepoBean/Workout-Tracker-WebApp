@@ -5,10 +5,8 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 import { AuthProvider } from './contexts/AuthContext';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
-import theme from './theme';
 import { UnitSystemProvider } from './utils/unitUtils';
+import { AppThemeProvider } from './contexts/ThemeContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
@@ -16,10 +14,9 @@ root.render(
     <BrowserRouter>
       <AuthProvider>
         <UnitSystemProvider>
-          <ThemeProvider theme={theme}>
-            <CssBaseline />
+          <AppThemeProvider>
             <App />
-          </ThemeProvider>
+          </AppThemeProvider>
         </UnitSystemProvider>
       </AuthProvider>
     </BrowserRouter>

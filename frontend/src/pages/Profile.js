@@ -35,6 +35,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../utils/api';
 import { useUnitSystem } from '../utils/unitUtils';
+import { useAppTheme } from '../contexts/ThemeContext';
 
 // Tab panel component for tab content
 function TabPanel(props) {
@@ -60,6 +61,7 @@ function TabPanel(props) {
 const Profile = () => {
   const { currentUser, updateProfile, logout } = useAuth();
   const { unitSystem, toggleUnitSystem } = useUnitSystem();
+  const { darkMode, toggleDarkMode } = useAppTheme();
   const [loading, setLoading] = useState(false);
   const [tabValue, setTabValue] = useState(0);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
@@ -83,7 +85,6 @@ const Profile = () => {
   // Settings state
   const [settings, setSettings] = useState({
     darkMode: false,
-    emailNotifications: true,
     unitSystem: 'metric', // metric or imperial
     language: 'en', // en, es, fr, etc.
   });
@@ -101,10 +102,18 @@ const Profile = () => {
       
       // Load user settings if available
       if (currentUser.settings) {
-        setSettings(currentUser.settings);
+        setSettings({
+          ...currentUser.settings,
+          darkMode: darkMode
+        });
+      } else {
+        setSettings(prevSettings => ({
+          ...prevSettings,
+          darkMode: darkMode
+        }));
       }
     }
-  }, [currentUser]);
+  }, [currentUser, darkMode]);
 
   // Handle tab change
   const handleTabChange = (event, newValue) => {
@@ -130,6 +139,11 @@ const Profile = () => {
       ...settings,
       [name]: newValue
     });
+    
+    // Special handling for darkMode to update ThemeContext immediately
+    if (name === 'darkMode') {
+      toggleDarkMode();
+    }
     
     // Special handling for unit system to update UnitSystemContext immediately
     if (name === 'unitSystem' && newValue !== unitSystem) {
@@ -427,20 +441,6 @@ const Profile = () => {
                     />
                   }
                   label="Dark Mode"
-                />
-              </Grid>
-              
-              <Grid item xs={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.emailNotifications}
-                      onChange={handleSettingsChange}
-                      name="emailNotifications"
-                      color="primary"
-                    />
-                  }
-                  label="Email Notifications"
                 />
               </Grid>
               
