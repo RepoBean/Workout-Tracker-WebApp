@@ -1,70 +1,26 @@
 # Workout Tracker
 
-A self-hosted workout tracking application built with FastAPI, React, and PostgreSQL, containerized with Docker Compose.
+A self-hosted workout tracking application that helps users track their workout progress, follow guided workout sessions, and visualize their fitness journey. Built with React, FastAPI, and PostgreSQL, all containerized with Docker.
 
-![Workout Tracker](https://via.placeholder.com/800x400?text=Workout+Tracker)
-
-## Overview
-
-Workout Tracker is a comprehensive fitness tracking application designed to help users:
-- Create and manage workout plans
-- Track workout sessions with guided exercise flows
-- Monitor progress through data visualization
-- Share workout plans with others
-
-The application is optimized for mobile use during workouts and features a responsive design with Progressive Web App capabilities.
-
-## Current Implementation Status
-
-### Backend (FastAPI)
-- ✅ User authentication with JWT
-- ✅ User management
-- ✅ Exercise management
-- ✅ Workout plan management
-- ✅ Workout session tracking
-- ✅ Progress tracking endpoints
-- ⏳ Database migrations (planned low priority)
-- ⏳ Seed data for exercises (planned)
-
-### Frontend (React)
-- ✅ Authentication (login/register)
-- ✅ Responsive layouts
-- ✅ Dashboard page
-- ✅ Protected routes
-- ✅ Material UI theming
-- ⏳ Workout plan pages (in progress)
-- ⏳ Exercise management pages (in progress)
-- ⏳ Workout session pages (in progress)
-- ⏳ Progress visualization (planned)
-
-### Containerization
-- ✅ Docker and Docker Compose configuration
-- ✅ Development environment
-- ⏳ Production configuration (planned)
+[SCREENSHOT: Homepage showing workout dashboard with progress charts]
 
 ## Features
 
-- **User Authentication**
-  - Secure registration and login
-  - Role-based access (admin/regular users)
-  - First-user-creates-admin approach
+- **Workout Management**
+  - Create and manage custom workout plans
+  - Track sets, reps, and weights for each exercise
+  - Support for progressive overload tracking
+  - Rest timer with configurable duration
 
-- **Exercise Management**
-  - Pre-populated exercise database
+[SCREENSHOT: Workout plan creation interface]
+
+- **Exercise Library**
+  - Comprehensive database of exercises
   - Custom exercise creation
-  - Exercise categorization
+  - Categorization by muscle groups and equipment
+  - Form instructions and tips
 
-- **Workout Planning**
-  - Create customized workout plans
-  - Configure sets, reps, and weights
-  - Support for progression systems
-  - Drop sets support
-
-- **Guided Workouts**
-  - Step-by-step exercise guidance
-  - Rest timers
-  - Weight and rep tracking
-  - Mobile-optimized interface
+[SCREENSHOT: Exercise library with filters and search]
 
 - **Progress Tracking**
   - Weight progression charts
@@ -72,96 +28,89 @@ The application is optimized for mobile use during workouts and features a respo
   - Workout frequency visualization
   - Personal records tracking
 
-- **Data Management**
-  - Export/import workout plans (JSON)
-  - Export workout history (CSV)
-  - Plan sharing between users
+[SCREENSHOT: Progress tracking dashboard with charts]
 
-- **Mobile Experience**
-  - Responsive design
-  - Progressive Web App capabilities
-  - Offline functionality
-
-## Technology Stack
-
-- **Frontend:** React with Material UI
-- **Backend:** FastAPI
-- **Database:** PostgreSQL
-- **Containerization:** Docker, Docker Compose
-
-## Getting Started
+## Quick Start
 
 ### Prerequisites
-
-- Docker and Docker Compose installed on your system
+- Docker and Docker Compose
 - Git
+- At least 2GB of free RAM
+- 1GB of free disk space
 
 ### Installation
 
 1. Clone the repository:
-   ```
+   ```bash
    git clone https://github.com/yourusername/workout-tracker.git
    cd workout-tracker
    ```
 
-2. Start the application:
+2. Create a `.env` file in the root directory:
+   ```bash
+   # Required environment variables
+   POSTGRES_USER=your_db_user
+   POSTGRES_PASSWORD=your_db_password
+   POSTGRES_DB=workout_tracker
+   JWT_SECRET=your_jwt_secret
    ```
+
+3. Start the application:
+   ```bash
    docker compose up --build
    ```
 
-3. Access the application:
+4. Access the application:
    - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
    - API Documentation: http://localhost:8000/docs
 
 ### First-Time Setup
+1. Create an admin account when prompted on first launch
+2. Use the admin interface to:
+   - Add exercises to the database
+   - Create workout plans
+   - Manage users
 
-On first launch, you'll be prompted to create an admin account. This account will have special privileges for managing the application.
+[SCREENSHOT: First-time setup wizard]
+
+## Data Persistence
+
+The application uses Docker volumes to persist your data:
+- Database data is stored in a PostgreSQL volume
+- Your data will persist between container restarts
+- For backups, you can use standard PostgreSQL backup tools
 
 ## Development
 
 ### Project Structure
-
 ```
 workout-tracker/
 ├── docker-compose.yml
 ├── .env
 ├── backend/
 │   ├── Dockerfile
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── database.py
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── routers/
-│   │   └── services/
-│   └── requirements.txt
+│   └── app/
 ├── frontend/
 │   ├── Dockerfile
-│   ├── package.json
-│   ├── public/
 │   └── src/
 └── docs/
-    └── memory_bank/
 ```
-
-### Documentation
-
-Comprehensive documentation is available in the `docs/memory_bank` directory:
-
-- [Project Requirements](docs/memory_bank/PROJECT_REQUIREMENTS.md)
-- [System Architecture](docs/memory_bank/SYSTEM_ARCHITECTURE.md)
-- [Database Schema](docs/memory_bank/DATABASE_SCHEMA.md)
-- [Development Roadmap](docs/memory_bank/DEVELOPMENT_ROADMAP.md)
-- [User Flows](docs/memory_bank/USER_FLOWS.md)
 
 ## Contributing
 
-Contributions are welcome! Please see the [Development Roadmap](docs/memory_bank/DEVELOPMENT_ROADMAP.md) for planned features.
+Contributions are welcome! Please feel free to submit a Pull Request. For major changes:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a Pull Request
+
+For bug reports or security concerns, please open an issue on GitHub.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## Acknowledgments
 

@@ -11,10 +11,14 @@ from app.database import get_db
 from app.models.models import User
 from app.schemas.token import TokenData
 
+# Debug prints for token expiry
+print(f"Token expiry from env: {os.getenv('ACCESS_TOKEN_EXPIRE_MINUTES')}")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+print(f"Final token expiry: {ACCESS_TOKEN_EXPIRE_MINUTES}")
+
 # JWT Configuration
 SECRET_KEY = os.getenv("SECRET_KEY", "supersecretkey")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

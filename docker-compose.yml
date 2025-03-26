@@ -9,7 +9,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@db:5432/workout_tracker
       - SECRET_KEY=${SECRET_KEY:-supersecretkey}
       - ALGORITHM=HS256
-      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-20160}
       - ALLOWED_ORIGINS=*
     depends_on:
       - db
