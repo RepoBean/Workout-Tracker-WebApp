@@ -38,14 +38,30 @@ A self-hosted workout tracking application that helps users track their workout 
    cd Workout-Tracker-WebApp
    ```
 
-2. Create a `.env` file in the root directory:
+2. Create a `.env` file in the root directory with the following variables:
    ```bash
-   # Required environment variables
-   POSTGRES_USER=your_db_user
-   POSTGRES_PASSWORD=your_db_password
+   # Database
+   POSTGRES_USER=postgres
+   POSTGRES_PASSWORD=postgres
    POSTGRES_DB=workout_tracker
-   JWT_SECRET=your_jwt_secret
+   DATABASE_URL=postgresql://postgres:postgres@db:5432/workout_tracker
+
+   # Backend
+   SECRET_KEY=supersecretkey        # This is your JWT secret
+   ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=20160  # ~2 weeks
+
+   # Server IP for remote/mobile testing (change if needed)
+   SERVER_IP=your_local_ip_address
+
+   # CORS Configuration
+   ALLOWED_ORIGINS=http://localhost:3000,http://${SERVER_IP}:3000
+
+   # API URL for frontend
+   API_URL=http://localhost:8000
    ```
+
+   > **Note:** For local testing, you can use the default values shown above. For production, use strong unique passwords and secrets.
 
 3. Start the application:
    ```bash
