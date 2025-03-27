@@ -34,8 +34,8 @@ A self-hosted workout tracking application that helps users track their workout 
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/workout-tracker.git
-   cd workout-tracker
+   git clone https://github.com/RepoBean/Workout-Tracker-WebApp.git
+   cd Workout-Tracker-WebApp
    ```
 
 2. Create a `.env` file in the root directory:
