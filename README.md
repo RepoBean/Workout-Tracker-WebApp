@@ -38,7 +38,16 @@ A self-hosted workout tracking application that helps users track their workout 
    cd Workout-Tracker-WebApp
    ```
 
-2. Create a `.env` file in the root directory with the following variables:
+2. Set up the environment:
+   
+   **Option 1: Automatic setup (Recommended)**
+   ```bash
+   chmod +x setup-env.sh
+   ./setup-env.sh
+   ```
+   
+   **Option 2: Manual setup**
+   Create a `.env` file in the root directory with the variables shown below:
    ```bash
    # Database
    POSTGRES_USER=postgres
