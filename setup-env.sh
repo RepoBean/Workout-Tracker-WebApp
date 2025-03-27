@@ -20,7 +20,7 @@ DATABASE_URL=postgresql://postgres:postgres@db:5432/workout_tracker
 # Backend
 SECRET_KEY=supersecretkey
 ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=30
+ACCESS_TOKEN_EXPIRE_MINUTES=20160  
 
 # Server IP for remote/mobile testing (auto-detected)
 SERVER_IP=$SERVER_IP
