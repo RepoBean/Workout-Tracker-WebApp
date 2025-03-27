@@ -34,25 +34,81 @@ const Dashboard = () => {
   const [nextWorkout, setNextWorkout] = useState(null);
   const [recentWorkouts, setRecentWorkouts] = useState([]);
   const [progressStats, setProgressStats] = useState(null);
+  const [inProgressSession, setInProgressSession] = useState(null);
   const [isLoading, setIsLoading] = useState({
     nextWorkout: true,
     recentWorkouts: true,
     progressStats: true
   });
 
+  // Add helper function before useEffect
+  const calculateRemainingWorkouts = (plan, completedSessions) => {
+    if (!plan) return 0;
+    
+    // Get unique workout days per week
+    const workoutDaysPerWeek = [...new Set(plan.exercises.map(ex => ex.day_of_week))].length;
+    
+    // Total expected workouts for the program
+    const totalProgramWorkouts = workoutDaysPerWeek * (plan.duration_weeks || 0);
+    
+    // Subtract completed workouts
+    const completedWorkouts = completedSessions?.length || 0;
+    
+    return Math.max(0, totalProgramWorkouts - completedWorkouts);
+  };
+
+  // Add helper function before useEffect
+  const determineNextWorkoutDay = (planDays, completedSessions) => {
+    // If no completed sessions, return the first day in the program
+    if (!completedSessions || completedSessions.length === 0) {
+      return planDays[0];
+    }
+    
+    // Sort sessions by end time (newest first)
+    const sortedSessions = [...completedSessions].sort(
+      (a, b) => new Date(b.end_time || b.start_time) - new Date(a.end_time || a.start_time)
+    );
+    
+    // Get the most recent completed day
+    const lastCompletedDay = sortedSessions[0].day_of_week;
+    
+    // Find that day's position in the plan
+    const lastDayIndex = planDays.indexOf(lastCompletedDay);
+    
+    // If day not found or it was the last day in the program, circle back to day 1
+    if (lastDayIndex === -1 || lastDayIndex === planDays.length - 1) {
+      return planDays[0];
+    }
+    
+    // Otherwise return the next day in the program sequence
+    return planDays[lastDayIndex + 1];
+  };
+
   useEffect(() => {
     // Fetch next scheduled workout
     const fetchNextWorkout = async () => {
       try {
         const response = await workoutPlansApi.getNextWorkout();
-        setNextWorkout(response.data);
+        const sessionsResponse = await sessionsApi.getByPlan(response.data.id, 'completed');
+        
+        // Calculate remaining workouts
+        const remainingWorkouts = calculateRemainingWorkouts(response.data, sessionsResponse.data);
+        
+        // Get all unique workout days from the plan
+        const planDays = [...new Set(response.data.exercises.map(ex => ex.day_of_week))].sort();
+        
+        // Determine next workout day based on completed sessions
+        const nextWorkoutDay = determineNextWorkoutDay(planDays, sessionsResponse.data);
+        
+        // Filter exercises for the next workout day
+        const nextDayExercises = response.data.exercises.filter(ex => ex.day_of_week === nextWorkoutDay);
         
         // Add a log to help debug conversion issues
-        if (response.data && response.data.exercises) {
-          console.log('Dashboard - Next workout exercises before conversion:', response.data.exercises);
+        if (nextDayExercises.length > 0) {
+          console.log('Dashboard - Next workout exercises before conversion:', nextDayExercises);
           
           // Ensure weights are converted to user's preferred unit
-          const convertedExercises = response.data.exercises.map(exercise => ({
+          const convertedExercises = nextDayExercises.map(exercise => ({
             ...exercise,
             target_weight: exercise.target_weight ? convertToPreferred(exercise.target_weight, 'kg') : exercise.target_weight
           }));
@@ -60,7 +116,8 @@ const Dashboard = () => {
           console.log('Dashboard - Next workout exercises after conversion:', convertedExercises);
           setNextWorkout({
             ...response.data,
-            exercises: convertedExercises
+            exercises: convertedExercises,
+            remainingWorkouts
           });
         }
       } catch (error) {
@@ -75,6 +132,10 @@ const Dashboard = () => {
       try {
         const response = await sessionsApi.getAll({ limit: 5 });
         setRecentWorkouts(response.data);
+        
+        // Find any in-progress session
+        const activeSession = response.data.find(session => session.status === 'in_progress');
+        setInProgressSession(activeSession);
       } catch (error) {
         console.error('Error fetching recent workouts:', error);
       } finally {
@@ -87,6 +148,8 @@ const Dashboard = () => {
       try {
         const recordsResponse = await progressApi.getPersonalRecords();
         const frequencyResponse = await progressApi.getWorkoutFrequency('month');
+        
+        console.log('Progress Stats - Frequency Response:', frequencyResponse.data);
         
         setProgressStats({
           personalRecords: recordsResponse.data,
@@ -156,31 +219,33 @@ const Dashboard = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                 <FitnessCenterIcon sx={{ mr: 1 }} />
                 <Typography variant="h5" component="div">
-                  Next Workout: {nextWorkout.name}
+                  {nextWorkout.name}
                 </Typography>
               </Box>
               
-              <Grid container spacing={2} sx={{ mb: 2 }}>
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <CalendarIcon sx={{ mr: 1, fontSize: 'small' }} />
-                    <Typography variant="body1">
-                      {nextWorkout.scheduled_date ? 
-                        formatDate(nextWorkout.scheduled_date) : 
-                        'Ready to start'
-                      }
-                    </Typography>
-                  </Box>
+              {/* Exercise List - Show next workout's exercises */}
+              <Box sx={{ mb: 2 }}>
+                <Grid container spacing={1}>
+                  {nextWorkout.exercises
+                    .slice(0, 6)
+                    .map((exercise, index) => (
+                      <Grid item xs={6} key={index}>
+                        <Typography variant="body1" sx={{ mb: 1 }}>
+                          • {exercise.name}
+                        </Typography>
+                      </Grid>
+                    ))}
                 </Grid>
-                <Grid item xs={12} sm={6}>
-                  <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                    <FitnessCenterIcon sx={{ mr: 1, fontSize: 'small' }} />
-                    <Typography variant="body1">
-                      {nextWorkout.exercises_count || 0} exercises
-                    </Typography>
-                  </Box>
-                </Grid>
-              </Grid>
+                {nextWorkout.exercises.length > 6 && (
+                  <Button 
+                    size="small"
+                    sx={{ color: 'inherit', textDecoration: 'underline', mt: 1 }}
+                    onClick={() => navigate(`/workout-plans/${nextWorkout.id}`)}
+                  >
+                    +{nextWorkout.exercises.length - 6} more exercises
+                  </Button>
+                )}
+              </Box>
               
               <Button 
                 variant="contained" 
@@ -188,7 +253,7 @@ const Dashboard = () => {
                 size="large"
                 fullWidth
                 startIcon={<StartIcon />}
-                onClick={() => navigate(`/workout-sessions/new?plan_id=${nextWorkout.id}`)}
+                onClick={() => navigate(`/workout-sessions/${inProgressSession ? `${inProgressSession.id}/resume` : `new?plan_id=${nextWorkout.id}`}`)}
                 sx={{ 
                   bgcolor: 'background.paper', 
                   color: 'primary.main',
@@ -197,7 +262,7 @@ const Dashboard = () => {
                   }
                 }}
               >
-                Start Workout
+                {inProgressSession ? 'Resume Workout' : 'Start Workout'}
               </Button>
             </CardContent>
           </Card>
@@ -413,32 +478,13 @@ const Dashboard = () => {
                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 2 }}>
                   <CircularProgress size={24} />
                 </Box>
-              ) : progressStats && progressStats.personalRecords && progressStats.personalRecords.length > 0 ? (
+              ) : progressStats && progressStats.workoutFrequency ? (
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Personal Records
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                      {progressStats.personalRecords.slice(0, 3).map((record, index) => (
-                        <Chip 
-                          key={index}
-                          label={`${record.exercise_name}: ${displayWeight(record.weight)}`}
-                          color="primary"
-                          variant="outlined"
-                        />
-                      ))}
-                    </Box>
-                  </Grid>
-                  
-                  <Grid item xs={12} sx={{ mt: 1 }}>
-                    <Typography variant="subtitle2" gutterBottom>
-                      Workout Stats
-                    </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
                       <Box sx={{ textAlign: 'center', minWidth: '100px' }}>
                         <Typography variant="h5" color="primary.main">
-                          {progressStats.workoutFrequency?.total || 0}
+                          {progressStats.workoutFrequency?.statistics?.total_workouts || 0}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
                           Total Workouts
@@ -446,18 +492,10 @@ const Dashboard = () => {
                       </Box>
                       <Box sx={{ textAlign: 'center', minWidth: '100px' }}>
                         <Typography variant="h5" color="primary.main">
-                          {progressStats.workoutFrequency?.this_month || 0}
+                          {nextWorkout?.remainingWorkouts || 0}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          This Month
-                        </Typography>
-                      </Box>
-                      <Box sx={{ textAlign: 'center', minWidth: '100px' }}>
-                        <Typography variant="h5" color="primary.main">
-                          {progressStats.workoutFrequency?.this_week || 0}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          This Week
+                          Workouts Left in Program
                         </Typography>
                       </Box>
                     </Box>

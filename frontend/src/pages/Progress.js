@@ -602,12 +602,11 @@ const Progress = () => {
     // Update how we extract total, this_week, and this_month from the data
     const { statistics } = progressData.workoutFrequency || {};
     const total = statistics ? statistics.total_workouts : 0;
-    const this_month = statistics ? statistics.total_workouts : 0; // For now, showing the same total
-    const this_week = statistics ? Math.round(statistics.avg_workouts_per_week) : 0;
+    const this_month = statistics ? statistics.total_workouts : 0; // Using total_workouts since we're fetching monthly data
 
     return (
       <Grid container spacing={3}>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={12} sm={6}>
           <Paper 
             sx={{ 
               p: 2, 
@@ -624,7 +623,7 @@ const Progress = () => {
             </Typography>
           </Paper>
         </Grid>
-        <Grid item xs={12} sm={4}>
+        <Grid item xs={12} sm={6}>
           <Paper 
             sx={{ 
               p: 2, 
@@ -638,23 +637,6 @@ const Progress = () => {
             </Typography>
             <Typography variant="h4" color="success.main">
               {this_month || 0}
-            </Typography>
-          </Paper>
-        </Grid>
-        <Grid item xs={12} sm={4}>
-          <Paper 
-            sx={{ 
-              p: 2, 
-              textAlign: 'center',
-              borderLeft: '4px solid',
-              borderColor: 'secondary.main'
-            }}
-          >
-            <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-              This Week
-            </Typography>
-            <Typography variant="h4" color="secondary.main">
-              {this_week || 0}
             </Typography>
           </Paper>
         </Grid>

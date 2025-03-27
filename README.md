@@ -2,8 +2,6 @@
 
 A self-hosted workout tracking application that helps users track their workout progress, follow guided workout sessions, and visualize their fitness journey. Built with React, FastAPI, and PostgreSQL, all containerized with Docker.
 
-[SCREENSHOT: Homepage showing workout dashboard with progress charts]
-
 ## Features
 
 - **Workout Management**
@@ -12,23 +10,17 @@ A self-hosted workout tracking application that helps users track their workout 
   - Support for progressive overload tracking
   - Rest timer with configurable duration
 
-[SCREENSHOT: Workout plan creation interface]
-
 - **Exercise Library**
   - Comprehensive database of exercises
   - Custom exercise creation
   - Categorization by muscle groups and equipment
   - Form instructions and tips
 
-[SCREENSHOT: Exercise library with filters and search]
-
 - **Progress Tracking**
   - Weight progression charts
   - Volume tracking
   - Workout frequency visualization
   - Personal records tracking
-
-[SCREENSHOT: Progress tracking dashboard with charts]
 
 ## Quick Start
 
@@ -70,8 +62,6 @@ A self-hosted workout tracking application that helps users track their workout 
    - Add exercises to the database
    - Create workout plans
    - Manage users
-
-[SCREENSHOT: First-time setup wizard]
 
 ## Data Persistence
 
