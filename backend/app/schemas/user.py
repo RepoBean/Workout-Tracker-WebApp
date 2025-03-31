@@ -19,6 +19,8 @@ class UserUpdate(BaseModel):
 class UserResponse(UserBase):
     id: int
     is_admin: bool
+    is_first_user: bool
+    has_completed_onboarding: bool
     created_at: datetime
     last_login: Optional[datetime] = None
     profile_picture: Optional[str] = None

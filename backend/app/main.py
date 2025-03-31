@@ -7,7 +7,7 @@ import time
 import logging
 
 from app.database import engine, Base, get_db
-from app.routers import auth, users, exercises, plans, sessions, progress
+from app.routers import auth, users, exercises, plans, sessions, progress, admin
 
 # Create the database tables with retry logic
 max_retries = 5
@@ -51,6 +51,7 @@ app.include_router(exercises.router, prefix="/api/exercises", tags=["Exercises"]
 app.include_router(plans.router, prefix="/api/plans", tags=["Workout Plans"])
 app.include_router(sessions.router, prefix="/api/sessions", tags=["Workout Sessions"])
 app.include_router(progress.router, prefix="/api/progress", tags=["Progress"])
+app.include_router(admin.router, prefix="/api/admin", tags=["Admin"])
 
 @app.get("/", tags=["Root"])
 async def root():

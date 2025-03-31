@@ -34,4 +34,4 @@ EOF
 
 echo "Environment configured with server IP: $SERVER_IP"
 echo "To restart the application with the new configuration, run:"
-echo "docker compose down && docker compose up -d" 
+echo "docker compose down && docker compose up -d --build" 

@@ -139,9 +139,14 @@ export const progressApi = {
 
 // User API
 export const userApi = {
+  getAllUsers: () => api.get('/api/users'),
   getCurrentUser: () => api.get('/api/users/me'),
   updateProfile: (userData) => api.patch('/api/users/me', userData),
   updateSettings: (settingsData) => api.patch('/api/users/me', { settings: settingsData }),
+  markOnboardingComplete: () => api.put('/api/users/me/onboarding'),
+  // Add functions for admin user management
+  updateUserRole: (userId, isAdmin) => api.patch(`/api/users/${userId}/role`, { is_admin: isAdmin }),
+  deleteUser: (userId) => api.delete(`/api/users/${userId}`),
 };
 
 /**

@@ -51,6 +51,35 @@ export const UnitSystemProvider = ({ children }) => {
     }
   };
 
+  // Set specific unit system preference and update user settings
+  const setUnitPreference = async (newUnitSystem) => {
+    // Only update if the system is actually changing
+    if (newUnitSystem !== unitSystem && (newUnitSystem === 'metric' || newUnitSystem === 'imperial')) {
+      console.log(`Setting unit preference to: ${newUnitSystem}`);
+      setUnitSystem(newUnitSystem);
+      
+      // Update user settings in the database
+      try {
+        const currentSettings = currentUser?.settings || {};
+        const updatedSettings = {
+          ...currentSettings,
+          unitSystem: newUnitSystem
+        };
+        
+        const response = await userApi.updateSettings(updatedSettings);
+        
+        if (response.data) {
+          updateProfile(response.data); // updateProfile updates AuthContext
+        }
+      } catch (error) {
+        console.error('Error setting unit system preference:', error);
+        // Optionally revert local state change or show error to user
+      }
+    } else {
+      console.log(`Unit preference already set to ${newUnitSystem} or invalid system provided.`);
+    }
+  };
+
   // Get the appropriate weight unit
   const weightUnit = unitSystem === 'metric' ? 'kg' : 'lb';
 
@@ -188,6 +217,7 @@ export const UnitSystemProvider = ({ children }) => {
   const value = {
     unitSystem,
     toggleUnitSystem,
+    setUnitPreference,
     weightUnit,
     convertToPreferred,
     convertFromPreferred,

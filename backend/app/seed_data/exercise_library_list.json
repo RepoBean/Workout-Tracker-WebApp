@@ -1,0 +1,922 @@
+[
+  {
+    "id": 1,
+    "name": "Ab Coaster Machine",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine-assisted movement targeting abs in an upward arc"
+  },
+  {
+    "id": 2,
+    "name": "Abdominal Crunch Machine",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Machine isolation exercise for the rectus abdominis"
+  },
+  {
+    "id": 3,
+    "name": "Ab Wheel Rollout",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Ab Wheel",
+    "description": "Challenging core exercise engaging multiple core muscles"
+  },
+  {
+    "id": 4,
+    "name": "Arnold Press",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Comprehensive shoulder exercise involving rotation"
+  },
+  {
+    "id": 5,
+    "name": "Assault Bike",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "High-intensity full-body cardio exercise using an air bike"
+  },
+  {
+    "id": 6,
+    "name": "Assisted Pull-Up Machine",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Assisted version of pull-ups, reducing bodyweight load"
+  },
+  {
+    "id": 7,
+    "name": "Back Extension",
+    "muscle_group": "Back",
+    "category": "Isolation",
+    "equipment": "Bench/Machine/Bodyweight",
+    "description": "Lower back isolation exercise, can be done on machine or bench"
+  },
+  {
+    "id": 8,
+    "name": "Barbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Classic compound exercise for chest, shoulders, and triceps"
+  },
+  {
+    "id": 9,
+    "name": "Barbell Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Barbell",
+    "description": "Fundamental bicep isolation exercise with a barbell"
+  },
+  {
+    "id": 10,
+    "name": "Barbell Front Raise",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Barbell",
+    "description": "Isolation exercise targeting the anterior deltoids using a barbell"
+  },
+  {
+    "id": 11,
+    "name": "Barbell Hip Thrust",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Compound exercise focusing heavily on glute development"
+  },
+  {
+    "id": 12,
+    "name": "Barbell Row",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Compound back exercise targeting lats, traps, and rhomboids"
+  },
+  {
+    "id": 13,
+    "name": "Barbell Shrug",
+    "muscle_group": "Back",
+    "category": "Isolation",
+    "equipment": "Barbell",
+    "description": "Isolation exercise targeting the upper trapezius muscles"
+  },
+  {
+    "id": 14,
+    "name": "Barbell Squat (Back Squat)",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Fundamental compound lower body exercise"
+  },
+  {
+    "id": 15,
+    "name": "Battle Ropes",
+    "muscle_group": "Full Body",
+    "category": "Functional",
+    "equipment": "Ropes",
+    "description": "High-intensity functional exercise using battle ropes"
+  },
+  {
+    "id": 16,
+    "name": "Bench Dips",
+    "muscle_group": "Arms",
+    "category": "Compound",
+    "equipment": "Bench/Bodyweight",
+    "description": "Bodyweight triceps exercise using a bench or elevated surface"
+  },
+  {
+    "id": 17,
+    "name": "Bicycle Crunch",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Bodyweight",
+    "description": "Dynamic core exercise targeting rectus abdominis and obliques"
+  },
+  {
+    "id": 18,
+    "name": "Box Jump",
+    "muscle_group": "Legs",
+    "category": "Plyometric",
+    "equipment": "Box",
+    "description": "Plyometric exercise for developing explosive lower body power"
+  },
+  {
+    "id": 19,
+    "name": "Bulgarian Split Squat",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Dumbbells/Bodyweight/Barbell",
+    "description": "Unilateral lower body exercise with rear foot elevated"
+  },
+  {
+    "id": 20,
+    "name": "Burpee",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Bodyweight",
+    "description": "Full-body calisthenic exercise combining squat, push-up, and jump"
+  },
+  {
+    "id": 21,
+    "name": "Cable Bicep Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Bicep isolation with constant tension from a cable machine"
+  },
+  {
+    "id": 22,
+    "name": "Cable Crossover",
+    "muscle_group": "Chest",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Chest isolation exercise focusing on adduction, adjustable angles"
+  },
+  {
+    "id": 23,
+    "name": "Cable Crunch",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Weighted abdominal crunch using a cable machine for resistance"
+  },
+  {
+    "id": 24,
+    "name": "Cable Face Pull",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Targets upper back, rear deltoids, and rotator cuff muscles"
+  },
+  {
+    "id": 25,
+    "name": "Cable Lateral Raise",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Isolation exercise for side deltoids with constant tension"
+  },
+  {
+    "id": 26,
+    "name": "Cable Pull-Through",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Hip hinge exercise targeting glutes and hamstrings"
+  },
+  {
+    "id": 27,
+    "name": "Cable Triceps Pushdown (Rope)",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Triceps isolation using a rope attachment for better grip variation"
+  },
+  {
+    "id": 28,
+    "name": "Cable Triceps Pushdown (Straight Bar)",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Classic triceps isolation exercise using a straight bar attachment"
+  },
+  {
+    "id": 29,
+    "name": "Cable Woodchopper (High to Low)",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Rotational core exercise targeting obliques"
+  },
+  {
+    "id": 30,
+    "name": "Cable Woodchopper (Low to High)",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Reverse rotational core exercise targeting obliques"
+  },
+  {
+    "id": 31,
+    "name": "Calf Raise (Machine - Seated)",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting the soleus muscle in the calf"
+  },
+  {
+    "id": 32,
+    "name": "Calf Raise (Machine - Standing)",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting the gastrocnemius muscle in the calf"
+  },
+  {
+    "id": 33,
+    "name": "Calf Raise (Smith Machine)",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Standing calf raise using the Smith machine for stability"
+  },
+  {
+    "id": 34,
+    "name": "Chest Dip",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dip Station/Bodyweight",
+    "description": "Compound exercise targeting lower chest, shoulders, and triceps"
+  },
+  {
+    "id": 35,
+    "name": "Chest Press Machine",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine-based compound chest exercise"
+  },
+  {
+    "id": 36,
+    "name": "Chin-Up",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Pull-up Bar",
+    "description": "Upper body compound pulling exercise with underhand grip (emphasizes biceps)"
+  },
+  {
+    "id": 37,
+    "name": "Clean and Jerk",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Olympic weightlifting movement developing power and coordination"
+  },
+  {
+    "id": 38,
+    "name": "Close-Grip Barbell Bench Press",
+    "muscle_group": "Arms",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Compound exercise emphasizing triceps development"
+  },
+  {
+    "id": 39,
+    "name": "Concentration Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Strict bicep isolation exercise, minimizing momentum"
+  },
+  {
+    "id": 40,
+    "name": "Crunch",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Bodyweight",
+    "description": "Basic abdominal exercise targeting the upper abs"
+  },
+  {
+    "id": 41,
+    "name": "Deadlift (Conventional)",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Fundamental compound exercise for total body strength, emphasizing posterior chain"
+  },
+  {
+    "id": 42,
+    "name": "Decline Barbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Bench press variation targeting the lower chest"
+  },
+  {
+    "id": 43,
+    "name": "Decline Dumbbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Dumbbell bench press variation targeting the lower chest"
+  },
+  {
+    "id": 44,
+    "name": "Dumbbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Chest compound exercise with dumbbells for better range of motion"
+  },
+  {
+    "id": 45,
+    "name": "Dumbbell Bicep Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Standard isolation exercise for biceps using dumbbells"
+  },
+  {
+    "id": 46,
+    "name": "Dumbbell Fly",
+    "muscle_group": "Chest",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Chest isolation exercise focusing on pectoral stretch and adduction"
+  },
+  {
+    "id": 47,
+    "name": "Dumbbell Front Raise",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Isolation exercise for anterior deltoids using dumbbells"
+  },
+  {
+    "id": 48,
+    "name": "Dumbbell Hammer Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Bicep and forearm exercise with neutral grip"
+  },
+  {
+    "id": 49,
+    "name": "Dumbbell Lateral Raise",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Isolation exercise for side (medial) deltoids"
+  },
+  {
+    "id": 50,
+    "name": "Dumbbell Lunge",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Unilateral lower body exercise with added weight from dumbbells"
+  },
+  {
+    "id": 51,
+    "name": "Dumbbell Overhead Press (Seated)",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Compound shoulder exercise performed seated for stability"
+  },
+  {
+    "id": 52,
+    "name": "Dumbbell Overhead Press (Standing)",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Compound shoulder exercise engaging core for stability"
+  },
+  {
+    "id": 53,
+    "name": "Dumbbell Pullover",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Exercise targeting chest and lats, depending on form"
+  },
+  {
+    "id": 54,
+    "name": "Dumbbell Romanian Deadlift",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Hamstring and glute focused exercise using dumbbells"
+  },
+  {
+    "id": 55,
+    "name": "Dumbbell Row (Single Arm)",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Unilateral compound back exercise, excellent for isolating each side"
+  },
+  {
+    "id": 56,
+    "name": "Dumbbell Shrug",
+    "muscle_group": "Back",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Isolation exercise targeting the upper trapezius muscles with dumbbells"
+  },
+  {
+    "id": 57,
+    "name": "Dumbbell Side Bend",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Isolation exercise targeting the obliques"
+  },
+  {
+    "id": 58,
+    "name": "Dumbbell Triceps Extension (Overhead)",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Triceps isolation exercise focusing on the long head"
+  },
+  {
+    "id": 59,
+    "name": "Elliptical Trainer",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "Low-impact cardio machine simulating running/walking motion"
+  },
+  {
+    "id": 60,
+    "name": "Farmer's Walk",
+    "muscle_group": "Full Body",
+    "category": "Functional",
+    "equipment": "Dumbbells/Kettlebells/Handles",
+    "description": "Functional exercise improving grip strength, core stability, and endurance"
+  },
+  {
+    "id": 61,
+    "name": "Front Squat",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Squat variation emphasizing quads and upper back strength"
+  },
+  {
+    "id": 62,
+    "name": "Glute Bridge",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Bodyweight/Barbell",
+    "description": "Floor-based exercise primarily targeting the glutes"
+  },
+  {
+    "id": 63,
+    "name": "Glute Kickback Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise focusing on glute extension"
+  },
+  {
+    "id": 64,
+    "name": "Goblet Squat",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Dumbbell/Kettlebell",
+    "description": "Squat variation holding weight in front, good for learning form"
+  },
+  {
+    "id": 65,
+    "name": "Good Morning",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Hip hinge exercise targeting hamstrings, glutes, and lower back"
+  },
+  {
+    "id": 66,
+    "name": "Hack Squat Machine",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine-based compound lower body exercise targeting legs"
+  },
+  {
+    "id": 67,
+    "name": "Hanging Knee Raise",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Pull-up Bar",
+    "description": "Core exercise targeting lower abs, performed hanging"
+  },
+  {
+    "id": 68,
+    "name": "Hanging Leg Raise",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Pull-up Bar",
+    "description": "Advanced core exercise targeting lower abs and hip flexors"
+  },
+  {
+    "id": 69,
+    "name": "Hip Abduction Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting outer thighs (gluteus medius/minimus)"
+  },
+  {
+    "id": 70,
+    "name": "Hip Adduction Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting inner thighs (adductors)"
+  },
+  {
+    "id": 71,
+    "name": "Incline Barbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Bench press variation targeting the upper chest"
+  },
+  {
+    "id": 72,
+    "name": "Incline Dumbbell Bench Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Dumbbell bench press variation targeting the upper chest"
+  },
+  {
+    "id": 73,
+    "name": "Incline Dumbbell Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Bicep curl variation emphasizing the long head stretch"
+  },
+  {
+    "id": 74,
+    "name": "Incline Dumbbell Fly",
+    "muscle_group": "Chest",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Dumbbell fly variation targeting the upper chest"
+  },
+  {
+    "id": 75,
+    "name": "Kettlebell Swing",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Kettlebell",
+    "description": "Explosive hip hinge movement for power, endurance, and posterior chain development"
+  },
+  {
+    "id": 76,
+    "name": "Lat Pulldown (Close Grip)",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Lat pulldown variation with close grip, emphasizing different back areas"
+  },
+  {
+    "id": 77,
+    "name": "Lat Pulldown (Wide Grip)",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Standard lat pulldown targeting latissimus dorsi width"
+  },
+  {
+    "id": 78,
+    "name": "Leg Extension Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting the quadriceps"
+  },
+  {
+    "id": 79,
+    "name": "Leg Press Machine",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine compound exercise for overall lower body development"
+  },
+  {
+    "id": 80,
+    "name": "Lunge (Bodyweight)",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Bodyweight",
+    "description": "Unilateral lower body exercise, good for balance and stability"
+  },
+  {
+    "id": 81,
+    "name": "Lying Leg Curl Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting hamstrings (lying prone)"
+  },
+  {
+    "id": 82,
+    "name": "Machine Chest Fly (Pec Deck)",
+    "muscle_group": "Chest",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Machine-based chest isolation exercise simulating fly movement"
+  },
+  {
+    "id": 83,
+    "name": "Machine Preacher Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise for biceps using a preacher curl machine"
+  },
+  {
+    "id": 84,
+    "name": "Machine Rear Delt Fly",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting rear deltoids using a machine"
+  },
+  {
+    "id": 85,
+    "name": "Machine Shoulder Press",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine-based overhead shoulder press for stability"
+  },
+  {
+    "id": 86,
+    "name": "Machine Triceps Extension",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Machine-based isolation exercise for triceps"
+  },
+  {
+    "id": 87,
+    "name": "Mountain Climber",
+    "muscle_group": "Core",
+    "category": "Compound",
+    "equipment": "Bodyweight",
+    "description": "Dynamic core and cardio exercise simulating climbing"
+  },
+  {
+    "id": 88,
+    "name": "Overhead Press (Barbell)",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Fundamental compound shoulder exercise, standing or seated"
+  },
+  {
+    "id": 89,
+    "name": "Plank",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Bodyweight",
+    "description": "Isometric core exercise focusing on stability"
+  },
+  {
+    "id": 90,
+    "name": "Pull-Up",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Pull-up Bar",
+    "description": "Upper body compound pulling exercise with overhand grip (emphasizes lats)"
+  },
+  {
+    "id": 91,
+    "name": "Push-Up",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Bodyweight",
+    "description": "Fundamental bodyweight exercise for chest, shoulders, and triceps"
+  },
+  {
+    "id": 92,
+    "name": "Romanian Deadlift (Barbell)",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Hip hinge exercise emphasizing hamstring and glute stretch/strength"
+  },
+  {
+    "id": 93,
+    "name": "Rotary Torso Machine",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Machine-based rotational core exercise targeting obliques"
+  },
+  {
+    "id": 94,
+    "name": "Rowing Machine",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "Full body cardio and conditioning exercise"
+  },
+  {
+    "id": 95,
+    "name": "Russian Twist",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Bodyweight/Weight",
+    "description": "Rotational core exercise targeting obliques, can be weighted"
+  },
+  {
+    "id": 96,
+    "name": "Seated Cable Row",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Cable Machine",
+    "description": "Machine back exercise focusing on thickness, various grips possible"
+  },
+  {
+    "id": 97,
+    "name": "Seated Leg Curl Machine",
+    "muscle_group": "Legs",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Isolation exercise targeting hamstrings (seated position)"
+  },
+  {
+    "id": 98,
+    "name": "Side Plank",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Bodyweight",
+    "description": "Isometric core exercise targeting obliques and core stability"
+  },
+  {
+    "id": 99,
+    "name": "Skull Crusher (Lying Triceps Extension)",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Barbell/EZ Bar/Dumbbells",
+    "description": "Isolation exercise for triceps performed lying down"
+  },
+  {
+    "id": 100,
+    "name": "Sled Push/Pull",
+    "muscle_group": "Full Body",
+    "category": "Functional",
+    "equipment": "Sled",
+    "description": "Functional conditioning exercise for strength and power"
+  },
+  {
+    "id": 101,
+    "name": "Smith Machine Squat",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Squat exercise on Smith machine for controlled movement path"
+  },
+  {
+    "id": 102,
+    "name": "Snatch",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Olympic weightlifting movement requiring speed, power, and mobility"
+  },
+  {
+    "id": 103,
+    "name": "Stair Climber",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "Cardio exercise simulating stair climbing"
+  },
+  {
+    "id": 104,
+    "name": "Stationary Bike",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "Standard cycling cardio machine"
+  },
+  {
+    "id": 105,
+    "name": "Straight Arm Pulldown",
+    "muscle_group": "Back",
+    "category": "Isolation",
+    "equipment": "Cable Machine",
+    "description": "Isolation exercise targeting the latissimus dorsi"
+  },
+  {
+    "id": 106,
+    "name": "Sumo Deadlift",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Barbell",
+    "description": "Deadlift variation with wide stance, emphasizing hips and quads more"
+  },
+  {
+    "id": 107,
+    "name": "T-Bar Row",
+    "muscle_group": "Back",
+    "category": "Compound",
+    "equipment": "Barbell/Machine",
+    "description": "Compound back exercise focusing on thickness, often using a specific handle"
+  },
+  {
+    "id": 108,
+    "name": "Thruster",
+    "muscle_group": "Full Body",
+    "category": "Compound",
+    "equipment": "Barbell/Dumbbells",
+    "description": "Combines a front squat with an overhead press for a full-body challenge"
+  },
+  {
+    "id": 109,
+    "name": "Treadmill",
+    "muscle_group": "Cardio",
+    "category": "Cardio",
+    "equipment": "Machine",
+    "description": "Machine for walking, jogging, or running indoors"
+  },
+  {
+    "id": 110,
+    "name": "Triceps Dip",
+    "muscle_group": "Arms",
+    "category": "Compound",
+    "equipment": "Dip Station/Bodyweight",
+    "description": "Compound exercise targeting triceps, chest, and shoulders (more upright torso for triceps focus)"
+  },
+  {
+    "id": 111,
+    "name": "Triceps Kickback",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells/Cable Machine",
+    "description": "Isolation exercise targeting the triceps, focusing on peak contraction"
+  },
+  {
+    "id": 112,
+    "name": "Turkish Get-Up",
+    "muscle_group": "Full Body",
+    "category": "Functional",
+    "equipment": "Kettlebell/Dumbbell",
+    "description": "Complex functional movement improving stability, mobility, and strength"
+  },
+  {
+    "id": 113,
+    "name": "Upright Row",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Barbell/Dumbbells/Cable Machine",
+    "description": "Compound exercise targeting shoulders (primarily side delts) and traps"
+  },
+  {
+    "id": 114,
+    "name": "Walking Lunge",
+    "muscle_group": "Legs",
+    "category": "Compound",
+    "equipment": "Bodyweight/Dumbbells/Barbell",
+    "description": "Dynamic lunge variation covering distance"
+  },
+  {
+    "id": 115,
+    "name": "Zottman Curl",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Bicep curl variation involving wrist rotation to also target forearms"
+  }
+]

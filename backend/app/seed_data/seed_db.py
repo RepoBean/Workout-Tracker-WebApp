@@ -18,15 +18,11 @@ import argparse
 from typing import List, Dict, Any, Optional
 import bcrypt
 from sqlalchemy.orm import Session
+import json
+import os
 
 from app.database import SessionLocal, engine, Base
 from app.models.models import User, Exercise, WorkoutPlan, PlanExercise, ExerciseSet, SessionExercise, WorkoutSession, SharedPlan
-from app.seed_data.exercise_library import (
-    CHEST_EXERCISES, BACK_EXERCISES, LEGS_EXERCISES, 
-    SHOULDERS_EXERCISES, ARMS_EXERCISES, CORE_EXERCISES
-)
-# Import workout plans
-from app.seed_data.workout_plans import WORKOUT_PLANS
 
 # Default admin user
 DEFAULT_ADMIN = {
@@ -62,6 +58,12 @@ def hash_password(password: str) -> str:
 
 def seed_users(db: Session):
     """Seed the database with default users."""
+    # Check if admin user already exists
+    existing_admin = db.query(User).filter(User.username == DEFAULT_ADMIN["username"]).first()
+    if existing_admin:
+        print(f"Admin user '{DEFAULT_ADMIN['username']}' already exists.")
+        return existing_admin
+
     # Create admin user
     admin_user = User(
         username=DEFAULT_ADMIN["username"],
@@ -70,221 +72,217 @@ def seed_users(db: Session):
         is_admin=DEFAULT_ADMIN["is_admin"]
     )
     db.add(admin_user)
-    db.commit()
+    db.flush() # Flush to get ID if needed, commit happens later
     print(f"Created admin user: {admin_user.username}")
     return admin_user
 
-def parse_weight_recommendation(weight_rec: Any) -> tuple:
-    """
-    Parse weight recommendation from string or dictionary to kg/lb values.
-    Returns a tuple of (kg_value, lb_value)
-    """
-    # Default values
-    kg_value = None
-    lb_value = None
-    
-    if isinstance(weight_rec, dict):
-        # For structured recommendations like {'beginner': {'male': '45-95 lbs'}}
-        # We'll take the intermediate male value as default
-        if 'intermediate' in weight_rec and 'male' in weight_rec['intermediate']:
-            weight_str = weight_rec['intermediate']['male']
-        else:
-            # Use the first available value
-            for level in weight_rec:
-                if isinstance(weight_rec[level], dict) and 'male' in weight_rec[level]:
-                    weight_str = weight_rec[level]['male']
-                    break
-            else:
-                # If no structured data found
-                return None, None
-    else:
-        # For simple string recommendations
-        weight_str = str(weight_rec)
-    
-    # Parse the weight string
-    if 'lbs' in weight_str or 'lb' in weight_str:
-        # Extract numeric part
-        try:
-            # Handle ranges like "45-95 lbs" by taking the average
-            if '-' in weight_str:
-                parts = weight_str.split('-')
-                first_num = float(''.join(c for c in parts[0] if c.isdigit() or c == '.'))
-                second_part = parts[1].split(' ')[0].strip()
-                second_num = float(''.join(c for c in second_part if c.isdigit() or c == '.'))
-                lb_value = (first_num + second_num) / 2
-            else:
-                lb_value = float(''.join(c for c in weight_str if c.isdigit() or c == '.'))
-            # Convert to kg
-            kg_value = lb_value * 0.453592
-        except (ValueError, IndexError):
-            # If parsing fails, leave as None
-            pass
-    
-    elif 'kg' in weight_str:
-        # Extract numeric part for kg
-        try:
-            if '-' in weight_str:
-                parts = weight_str.split('-')
-                first_num = float(''.join(c for c in parts[0] if c.isdigit() or c == '.'))
-                second_part = parts[1].split(' ')[0].strip()
-                second_num = float(''.join(c for c in second_part if c.isdigit() or c == '.'))
-                kg_value = (first_num + second_num) / 2
-            else:
-                kg_value = float(''.join(c for c in weight_str if c.isdigit() or c == '.'))
-            # Convert to lb
-            lb_value = kg_value * 2.20462
-        except (ValueError, IndexError):
-            # If parsing fails, leave as None
-            pass
-    
-    return kg_value, lb_value
-
 def seed_exercises(db: Session, admin_user: User):
-    """Seed the database with exercises from the exercise library."""
-    # Combine all exercise lists
-    all_exercises = []
-    all_exercises.extend(CHEST_EXERCISES)
-    all_exercises.extend(BACK_EXERCISES)
-    
-    # Add other exercise categories if they exist
-    if 'LEGS_EXERCISES' in globals():
-        all_exercises.extend(LEGS_EXERCISES)
-    if 'SHOULDERS_EXERCISES' in globals():
-        all_exercises.extend(SHOULDERS_EXERCISES)
-    if 'ARMS_EXERCISES' in globals():
-        all_exercises.extend(ARMS_EXERCISES)
-    if 'CORE_EXERCISES' in globals():
-        all_exercises.extend(CORE_EXERCISES)
-    
+    """Seed the database with exercises from exercise_library_list.json."""
     exercise_count = 0
     exercise_dict = {}  # Store exercises by name for later reference
-    
-    for exercise_data in all_exercises:
-        # Parse weight recommendations
-        kg_weight, lb_weight = parse_weight_recommendation(exercise_data.get("weight_recommendation"))
-        
-        # Convert secondary muscles from list to comma-separated string
-        secondary_muscles = None
-        if "secondary_muscle_groups" in exercise_data and exercise_data["secondary_muscle_groups"]:
-            secondary_muscles = ",".join(exercise_data["secondary_muscle_groups"])
-        
-        # Create exercise object
+
+    # Construct the path to the JSON file relative to this script's location
+    script_dir = os.path.dirname(__file__)
+    json_path = os.path.join(script_dir, 'exercise_library_list.json')
+
+    try:
+        with open(json_path, 'r') as f:
+            all_exercises_data = json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Cannot find {json_path}. Make sure it's in the seed_data directory.")
+        return {}
+    except json.JSONDecodeError:
+        print(f"Error: Could not decode JSON from {json_path}.")
+        return {}
+
+    print(f"Loading exercises from {json_path}...")
+
+    for exercise_data in all_exercises_data:
+        # Check if exercise already exists by name (important if --keep-existing is used)
+        exercise_name = exercise_data.get("name")
+        if not exercise_name:
+             print(f"Warning: Skipping exercise due to missing name: {exercise_data}")
+             continue
+
+        existing_exercise = db.query(Exercise).filter(Exercise.name == exercise_name).first()
+        if existing_exercise:
+            # print(f"Exercise '{exercise_name}' already exists, skipping creation.")
+            exercise_dict[exercise_name] = existing_exercise # Ensure it's in the dict for plan seeding
+            continue
+
+        # Create exercise object from JSON data
+        # Map JSON fields to Exercise model fields
         exercise = Exercise(
-            name=exercise_data["name"],
-            description=exercise_data["description"],
-            category=exercise_data["category"],
-            equipment=exercise_data["equipment"],
+            name=exercise_name,
+            description=exercise_data.get("description"),
+            category=exercise_data.get("category"),
+            equipment=exercise_data.get("equipment"),
+            muscle_group=exercise_data.get("muscle_group"),
+            # Fields not in this specific JSON will be default/None
+            # secondary_muscle_groups=None,
+            # instructions=None,
+            # starting_weight_kg=None,
+            # starting_weight_lb=None,
+            # progression_type=None,
+            # difficulty_level=None,
             is_system=True,  # Mark as system exercise
             created_by=admin_user.id,
-            muscle_group=exercise_data["primary_muscle_group"],
-            secondary_muscle_groups=secondary_muscles,
-            instructions=exercise_data["instructions"],
-            starting_weight_kg=kg_weight,
-            starting_weight_lb=lb_weight,
-            progression_type=exercise_data.get("progression_scheme"),
-            difficulty_level=exercise_data.get("difficulty"),
         )
-        
+
         db.add(exercise)
         exercise_count += 1
-        
-        # Store the exercise object by name for later reference
-        exercise_dict[exercise_data["name"]] = exercise
-    
-    db.commit()
-    print(f"Seeded {exercise_count} exercises")
-    
+
+        # Important: Need to flush to get the object in the session
+        # so it can be added to the dictionary before commit
+        db.flush()
+        exercise_dict[exercise.name] = exercise # Use the actual ORM object
+
+    # Commit is handled after seeding plans now
+    print(f"Prepared {exercise_count} new exercises for seeding.")
+
     return exercise_dict
 
 def seed_workout_plans(db: Session, admin_user: User, exercise_dict: Dict[str, Exercise]):
     """
-    Seed the database with sample workout plans.
+    Seed the database with sample workout plans from JSON files.
+    Currently loads 'test workout.json'.
     """
     plan_count = 0
     exercise_count = 0
-    
-    for plan_data in WORKOUT_PLANS:
+
+    # List of JSON plan files to load
+    plan_files = ['test workout.json'] # Add more filenames here if needed
+    script_dir = os.path.dirname(__file__)
+
+    for plan_filename in plan_files:
+        json_path = os.path.join(script_dir, plan_filename)
+        print(f"Loading workout plan from {json_path}...")
+
+        try:
+            with open(json_path, 'r') as f:
+                plan_data = json.load(f)
+        except FileNotFoundError:
+            print(f"Error: Cannot find {json_path}. Skipping this plan.")
+            continue
+        except json.JSONDecodeError:
+            print(f"Error: Could not decode JSON from {json_path}. Skipping this plan.")
+            continue
+
+        # Check if plan already exists by name (important if --keep-existing is used)
+        plan_name = plan_data.get("name")
+        if not plan_name:
+            print(f"Warning: Skipping workout plan due to missing name in {plan_filename}")
+            continue
+
+        existing_plan = db.query(WorkoutPlan).filter(WorkoutPlan.name == plan_name).first()
+        if existing_plan:
+            # print(f"Workout plan '{plan_name}' already exists, skipping.")
+            continue
+
         # Create workout plan
         workout_plan = WorkoutPlan(
-            name=plan_data["name"],
-            description=plan_data["description"],
+            name=plan_name,
+            description=plan_data.get("description"),
             owner_id=admin_user.id,
-            is_public=plan_data["is_public"],
-            days_per_week=plan_data["days_per_week"],
-            duration_weeks=plan_data["duration_weeks"]
+            is_public=plan_data.get("is_public", False), # Default to False if missing
+            days_per_week=plan_data.get("days_per_week"),
+            duration_weeks=plan_data.get("duration_weeks")
         )
-        
+
         db.add(workout_plan)
-        db.flush()  # Get the workout_plan.id
-        
+        db.flush()  # Get the workout_plan.id before adding exercises
+
         # Add exercises to the plan
-        for ex_data in plan_data["exercises"]:
-            # Find the exercise by name
-            exercise_name = ex_data["name"]
-            if exercise_name not in exercise_dict:
-                print(f"Warning: Exercise '{exercise_name}' not found in exercise library. Skipping.")
-                continue
-            
-            exercise = exercise_dict[exercise_name]
-            
-            # Create plan_exercise
-            plan_exercise = PlanExercise(
-                workout_plan_id=workout_plan.id,
-                exercise_id=exercise.id,
-                sets=ex_data["sets"],
-                reps=ex_data["reps"],
-                rest_seconds=ex_data.get("rest_seconds"),
-                order=ex_data["order"],
-                day_of_week=ex_data.get("day_of_week"),
-                progression_type=ex_data.get("progression_type"),
-                progression_value=ex_data.get("progression_value"),
-                progression_threshold=ex_data.get("progression_threshold")
-            )
-            
-            db.add(plan_exercise)
-            exercise_count += 1
-        
+        if "exercises" in plan_data:
+            for ex_data in plan_data["exercises"]:
+                # Find the exercise by name (using the dictionary built earlier)
+                # Use 'exercise_name' from the JSON workout plan structure
+                exercise_name = ex_data.get("exercise_name")
+                if not exercise_name:
+                    print(f"Warning: Skipping exercise in plan '{workout_plan.name}' due to missing 'exercise_name'.")
+                    continue
+
+                if exercise_name not in exercise_dict:
+                    print(f"Warning: Exercise '{exercise_name}' for plan '{workout_plan.name}' not found in seeded exercises. Skipping.")
+                    continue
+
+                exercise = exercise_dict[exercise_name] # Get the Exercise object
+
+                # Create plan_exercise using data from the JSON workout plan
+                plan_exercise = PlanExercise(
+                    workout_plan_id=workout_plan.id,
+                    exercise_id=exercise.id, # Use the ID from the looked-up Exercise object
+                    sets=ex_data.get("sets"),
+                    reps=ex_data.get("reps"),
+                    target_weight=ex_data.get("target_weight"), # Add target_weight if present
+                    rest_seconds=ex_data.get("rest_seconds"),
+                    order=ex_data.get("order"),
+                    day_of_week=ex_data.get("day_of_week"),
+                    progression_type=ex_data.get("progression_type"),
+                    progression_value=ex_data.get("progression_value"),
+                    progression_threshold=ex_data.get("progression_threshold")
+                )
+
+                # Validate before adding
+                if plan_exercise.sets is None or plan_exercise.reps is None:
+                     print(f"Warning: Skipping exercise '{exercise_name}' in plan '{workout_plan.name}' due to missing sets/reps.")
+                     continue
+
+                db.add(plan_exercise)
+                exercise_count += 1
+
         plan_count += 1
-    
-    db.commit()
-    print(f"Seeded {plan_count} workout plans with {exercise_count} exercises")
+
+    # Commit is handled in main() now
+    print(f"Prepared {plan_count} new workout plans with {exercise_count} exercises for seeding.")
 
 def main():
     """Main function to seed the database."""
     parser = argparse.ArgumentParser(description="Seed the workout tracker database")
-    parser.add_argument('--keep-existing', action='store_true', 
+    parser.add_argument('--keep-existing', action='store_true',
                         help="Don't clear existing data before seeding")
-    
+
     args = parser.parse_args()
-    
+
     # Create tables if they don't exist
+    print("Ensuring database tables exist...")
     create_tables()
-    
+
     # Get database session
     db = SessionLocal()
-    
+
     try:
         # Clear tables if not keeping existing data
         if not args.keep_existing:
             print("Clearing existing data...")
-            clear_tables(db)
-        
+            clear_tables(db) # This function already commits the deletes
+
         # Seed users
-        admin_user = seed_users(db)
-        
-        # Seed exercises
-        exercise_dict = seed_exercises(db, admin_user)
-        
-        # Seed workout plans
-        seed_workout_plans(db, admin_user, exercise_dict)
-        
+        print("Seeding users...")
+        admin_user = seed_users(db) # This function flushes, commit happens below
+
+        # Seed exercises from JSON
+        print("Seeding exercises...")
+        exercise_dict = seed_exercises(db, admin_user) # Returns dict keyed by name, flushes new
+
+        # Seed workout plans from JSON
+        print("Seeding workout plans...")
+        seed_workout_plans(db, admin_user, exercise_dict) # Flushes new
+
+        # Commit all changes (new users, exercises, plans)
+        print("Committing changes to database...")
+        db.commit()
+
         print("Database seeding completed successfully!")
-    
+
     except Exception as e:
         db.rollback()
         print(f"Error seeding database: {e}")
+        # Consider more detailed error logging or re-raising depending on context
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
-    
+
     finally:
         db.close()
 

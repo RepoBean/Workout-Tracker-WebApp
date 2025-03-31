@@ -17,6 +17,8 @@ class User(Base):
     profile_picture = Column(String, nullable=True)
     settings = Column(Text, nullable=True)  # JSON string for user settings
     active_plan_id = Column(Integer, ForeignKey("workout_plans.id"), nullable=True)
+    is_first_user = Column(Boolean, default=False, nullable=False)
+    has_completed_onboarding = Column(Boolean, default=False, nullable=False)
     
     # Relationships
     workout_plans = relationship("WorkoutPlan", back_populates="owner", foreign_keys="WorkoutPlan.owner_id")

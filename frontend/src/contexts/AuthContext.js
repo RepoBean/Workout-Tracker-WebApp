@@ -109,7 +109,7 @@ export const AuthProvider = ({ children }) => {
     setError(null);
   };
 
-  // Update user profile
+  // Update user profile on the backend and update local state
   const updateProfile = async (userData) => {
     try {
       setError(null);
@@ -120,6 +120,14 @@ export const AuthProvider = ({ children }) => {
       setError(error.response?.data?.detail || 'Profile update failed');
       throw error;
     }
+  };
+
+  // Add this function to update currentUser state locally
+  const updateCurrentUserLocally = (updates) => {
+    setCurrentUser(prevUser => ({
+      ...prevUser,
+      ...updates
+    }));
   };
 
   // Check if user is admin
@@ -137,6 +145,7 @@ export const AuthProvider = ({ children }) => {
     login,
     logout,
     updateProfile,
+    updateCurrentUserLocally,
     isAdmin,
   };
 

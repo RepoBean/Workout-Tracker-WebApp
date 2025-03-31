@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Box, 
   Typography, 
@@ -22,7 +22,17 @@ import {
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle
+  DialogTitle,
+  ListItemIcon,
+  TableContainer,
+  Table,
+  TableHead,
+  TableBody,
+  TableRow,
+  TableCell,
+  TablePagination,
+  Tooltip,
+  Chip
 } from '@mui/material';
 import { 
   Person as PersonIcon,
@@ -30,7 +40,11 @@ import {
   Edit as EditIcon,
   Settings as SettingsIcon,
   Security as SecurityIcon,
-  PhotoCamera as PhotoCameraIcon
+  PhotoCamera as PhotoCameraIcon,
+  AdminPanelSettings as AdminPanelSettingsIcon,
+  DeleteForever as DeleteIcon,
+  SupervisorAccount as AdminIcon,
+  PersonOff as RemoveAdminIcon
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { userApi } from '../utils/api';
@@ -59,7 +73,7 @@ function TabPanel(props) {
 }
 
 const Profile = () => {
-  const { currentUser, updateProfile, logout } = useAuth();
+  const { currentUser, updateProfile, logout, isAdmin } = useAuth();
   const { unitSystem, toggleUnitSystem } = useUnitSystem();
   const { darkMode, toggleDarkMode } = useAppTheme();
   const [loading, setLoading] = useState(false);
@@ -88,6 +102,42 @@ const Profile = () => {
     unitSystem: 'metric', // metric or imperial
     language: 'en', // en, es, fr, etc.
   });
+
+  // State for Admin User List
+  const [adminUserList, setAdminUserList] = useState([]);
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState(null);
+
+  // State for Admin action confirmation dialogs
+  const [userToDelete, setUserToDelete] = useState(null); // Store user object for delete confirm
+  const [userToModifyRole, setUserToModifyRole] = useState(null); // Store user object for role confirm
+  const [roleConfirmOpen, setRoleConfirmOpen] = useState(false);
+  const [deleteUserConfirmOpen, setDeleteUserConfirmOpen] = useState(false);
+  const [adminActionLoading, setAdminActionLoading] = useState(false); // Loading for role/delete actions
+
+  // Fetch User List for Admin Tab
+  const fetchAdminUserList = useCallback(async () => {
+    if (tabValue === 3 && isAdmin()) { // Only fetch if Admin tab is active and user is admin
+      setAdminLoading(true);
+      setAdminError(null);
+      try {
+        // Use the existing /api/users endpoint (assuming userApi has a function for it)
+        // If not, we need to add one to utils/api.js
+        // Let's assume userApi.getAllUsers() exists for now
+        const response = await userApi.getAllUsers(); // Make sure this exists!
+        setAdminUserList(response.data || []);
+      } catch (err) {
+        console.error("Error fetching user list:", err);
+        setAdminError(err.response?.data?.detail || 'Failed to load users. Ensure you have admin privileges.');
+      } finally {
+        setAdminLoading(false);
+      }
+    }
+  }, [tabValue, isAdmin]); // Dependencies: fetch when tab changes or admin status potentially changes
+
+  useEffect(() => {
+    fetchAdminUserList();
+  }, [fetchAdminUserList]); // Run fetch logic when the callback changes
 
   // Load user data on mount
   useEffect(() => {
@@ -292,6 +342,72 @@ const Profile = () => {
     }
   };
 
+  // Handlers for Admin Actions
+  const handleOpenRoleConfirm = (user) => {
+    setUserToModifyRole(user);
+    setRoleConfirmOpen(true);
+  };
+
+  const handleCloseRoleConfirm = () => {
+    setUserToModifyRole(null);
+    setRoleConfirmOpen(false);
+  };
+
+  const handleOpenDeleteConfirm = (user) => {
+    setUserToDelete(user);
+    setDeleteUserConfirmOpen(true);
+  };
+
+  const handleCloseDeleteConfirm = () => {
+    setUserToDelete(null);
+    setDeleteUserConfirmOpen(false);
+  };
+
+  // Confirmation Handlers (Implement logic later)
+  const handleConfirmRoleChange = async () => {
+    if (!userToModifyRole) return;
+    setAdminActionLoading(true);
+    console.log("Confirming role change for:", userToModifyRole);
+    // --- API call logic here --- 
+    // await userApi.updateUserRole(userToModifyRole.id, !userToModifyRole.is_admin);
+    // --- Update state, show snackbar, close dialog --- 
+    setAdminActionLoading(false);
+    handleCloseRoleConfirm();
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!userToDelete) return;
+    setAdminActionLoading(true);
+    // console.log("Confirming deletion for:", userToDelete); // Keep or remove logging as needed
+    try {
+      // Call the API to delete the user
+      await userApi.deleteUser(userToDelete.id);
+      
+      // Show success message
+      setSnackbar({
+        open: true,
+        message: `User '${userToDelete.username}' deleted successfully.`, 
+        severity: 'success'
+      });
+      
+      // Refresh the user list to reflect the deletion
+      fetchAdminUserList(); 
+      
+    } catch (err) {
+      console.error("Error deleting user:", err);
+      // Show error message
+      setSnackbar({
+        open: true,
+        message: err.response?.data?.detail || 'Failed to delete user.',
+        severity: 'error'
+      });
+    } finally {
+      // Stop loading and close the dialog regardless of success/error
+      setAdminActionLoading(false);
+      handleCloseDeleteConfirm();
+    }
+  };
+
   // Render loading state
   if (!currentUser) {
     return (
@@ -319,6 +435,9 @@ const Profile = () => {
           <Tab icon={<PersonIcon />} label="Profile" />
           <Tab icon={<SettingsIcon />} label="Settings" />
           <Tab icon={<SecurityIcon />} label="Security" />
+          {isAdmin() && (
+            <Tab icon={<AdminPanelSettingsIcon />} label="Admin" />
+          )}
         </Tabs>
       </Paper>
 
@@ -580,6 +699,94 @@ const Profile = () => {
         </Card>
       </TabPanel>
 
+      {/* Admin Tab */}
+      {isAdmin() && (
+        <TabPanel value={tabValue} index={3}>
+          <Card elevation={0}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom>
+                User Management
+              </Typography>
+              <Divider sx={{ my: 2 }} />
+
+              {adminLoading && <CircularProgress />}
+              {adminError && <Alert severity="error">{adminError}</Alert>}
+
+              {!adminLoading && !adminError && (
+                <TableContainer component={Paper} elevation={1}>
+                  <Table sx={{ minWidth: 650 }} aria-label="user management table">
+                    <TableHead>
+                      <TableRow sx={{ '& th': { fontWeight: 'bold' } }}>
+                        <TableCell>ID</TableCell>
+                        <TableCell>Username</TableCell>
+                        <TableCell>Email</TableCell>
+                        <TableCell>Admin Status</TableCell>
+                        <TableCell>Registered</TableCell>
+                        <TableCell>Last Login</TableCell>
+                        <TableCell align="center">Actions</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {adminUserList.map((user) => (
+                        <TableRow
+                          key={user.id}
+                          sx={{ '&:last-child td, &:last-child th': { border: 0 } }}
+                        >
+                          <TableCell component="th" scope="row">
+                            {user.id}
+                          </TableCell>
+                          <TableCell>{user.username}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Chip
+                              label={user.is_admin ? 'Admin' : 'User'}
+                              color={user.is_admin ? 'success' : 'default'}
+                              size="small"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            {new Date(user.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell>
+                            {user.last_login ? new Date(user.last_login).toLocaleString() : 'N/A'}
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title={user.is_admin ? "Remove Admin" : "Make Admin"}>
+                              <span>
+                                <IconButton 
+                                  aria-label="toggle admin role" 
+                                  color={user.is_admin ? "warning" : "success"}
+                                  onClick={() => handleOpenRoleConfirm(user)}
+                                  disabled={user.id === currentUser.id}
+                                >
+                                  {user.is_admin ? <RemoveAdminIcon /> : <AdminIcon />}
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                            <Tooltip title="Delete User">
+                              <span>
+                                <IconButton 
+                                  aria-label="delete user" 
+                                  color="error"
+                                  onClick={() => handleOpenDeleteConfirm(user)}
+                                  disabled={user.id === currentUser.id}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </span>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </CardContent>
+          </Card>
+        </TabPanel>
+      )}
+
       {/* Delete Account Confirmation Dialog */}
       <Dialog
         open={confirmDialogOpen}
@@ -595,6 +802,48 @@ const Profile = () => {
           <Button onClick={() => setConfirmDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleDeleteAccount} color="error" disabled={loading}>
             Delete Account
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Role Change Confirmation Dialog */}
+      <Dialog open={roleConfirmOpen} onClose={handleCloseRoleConfirm}>
+        <DialogTitle>Confirm Role Change</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to {userToModifyRole?.is_admin ? 'remove admin privileges from' : 'grant admin privileges to'} <strong>{userToModifyRole?.username}</strong>?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseRoleConfirm} disabled={adminActionLoading}>Cancel</Button>
+          <Button 
+            onClick={handleConfirmRoleChange} 
+            color={userToModifyRole?.is_admin ? "warning" : "success"} 
+            disabled={adminActionLoading}
+            variant="contained"
+          >
+            {adminActionLoading ? <CircularProgress size={24} /> : 'Confirm'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <Dialog open={deleteUserConfirmOpen} onClose={handleCloseDeleteConfirm}>
+        <DialogTitle color="error">Confirm User Deletion</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you absolutely sure you want to delete the user <strong>{userToDelete?.username}</strong>? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseDeleteConfirm} disabled={adminActionLoading}>Cancel</Button>
+          <Button 
+            onClick={handleConfirmDelete} 
+            color="error" 
+            disabled={adminActionLoading}
+            variant="contained"
+          >
+            {adminActionLoading ? <CircularProgress size={24} color="error"/> : 'Delete User'}
           </Button>
         </DialogActions>
       </Dialog>

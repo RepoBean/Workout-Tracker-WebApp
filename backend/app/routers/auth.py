@@ -39,9 +39,9 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
             detail="Email already registered",
         )
     
-    # Check if this is the first user (make them admin)
+    # Check if this is the first user (make them admin and set the flag)
     user_count = db.query(func.count(User.id)).scalar()
-    is_first_user = user_count == 0
+    is_first = user_count == 0
     
     # Create new user
     hashed_password = get_password_hash(user.password)
@@ -49,7 +49,9 @@ async def register(user: UserCreate, db: Session = Depends(get_db)):
         username=user.username,
         email=user.email,
         hashed_password=hashed_password,
-        is_admin=is_first_user,
+        is_admin=is_first, # First user is admin
+        is_first_user=is_first, # Set the new flag
+        has_completed_onboarding=False # Default onboarding status
     )
     
     db.add(db_user)
