@@ -57,11 +57,13 @@ def hash_password(password: str) -> str:
     return hashed.decode('utf-8')
 
 def seed_users(db: Session):
-    """Seed the database with default users."""
-    # Check if admin user already exists
-    print(f"Checking for existing admin user: {DEFAULT_ADMIN['username']}...")
+    """Finds the first created user to associate seed data with."""
+    # Query for the first user based on ID
+    print("Checking for the first registered user...")
+    first_user = None
     try:
-        existing_admin = db.query(User).filter(User.username == DEFAULT_ADMIN["username"]).first()
+        # Order by ID ascending and take the first one
+        first_user = db.query(User).order_by(User.id.asc()).first()
     except Exception as e:
         print("\n!!! Database Error Encountered !!!")
         print("This likely means your User model definition in models.py does not match")
@@ -71,13 +73,13 @@ def seed_users(db: Session):
         print("Aborting seed process.")
         return None # Return None to signal main function to stop
 
-    if existing_admin:
-        print(f"Found existing admin user \'{DEFAULT_ADMIN['username']}\'.")
-        return existing_admin
+    if first_user:
+        print(f"Found first user '{first_user.username}' (ID: {first_user.id}). Seed data will be associated with this user.")
+        return first_user
     else:
-        # If admin user doesn't exist, print error and return None. Do not create.
-        print(f"Error: Admin user \'{DEFAULT_ADMIN['username']}\' not found.")
-        print("Please create this user through the application's normal signup process first.")
+        # If no users exist, print error and return None.
+        print(f"Error: No users found in the database.")
+        print("Please create the first user account through the application's normal signup process first.")
         print("Aborting seed process.")
         return None
 
@@ -262,25 +264,23 @@ def main():
             print("Clearing existing data...")
             clear_tables(db) # This function already commits the deletes
 
-        # --- Check for Admin User ---
-        print("Looking for admin user...")
-        admin_user = seed_users(db)
+        # --- Find the First User ---
+        print("Looking for the first registered user...")
+        owner_user = seed_users(db) # Renamed variable for clarity
 
-        # --- Stop if Admin User Not Found ---
-        if admin_user is None:
+        # --- Stop if No User Found ---
+        if owner_user is None:
             # Error message is printed within seed_users
             sys.exit(1) # Exit script
 
-        # --- Proceed with Seeding Exercises and Plans ---
-        # Seed exercises from JSON
+        # --- Proceed with Seeding Exercises and Plans using the found user's ID ---
         print("Seeding exercises...")
-        exercise_dict = seed_exercises(db, admin_user) # Returns dict keyed by name, flushes new
+        exercise_dict = seed_exercises(db, owner_user)
 
-        # Seed workout plans from JSON
         print("Seeding workout plans...")
-        seed_workout_plans(db, admin_user, exercise_dict) # Flushes new
+        seed_workout_plans(db, owner_user, exercise_dict)
 
-        # Commit all changes (new users, exercises, plans)
+        # Commit all changes
         print("Committing changes to database...")
         db.commit()
 
