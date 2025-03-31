@@ -59,22 +59,27 @@ def hash_password(password: str) -> str:
 def seed_users(db: Session):
     """Seed the database with default users."""
     # Check if admin user already exists
-    existing_admin = db.query(User).filter(User.username == DEFAULT_ADMIN["username"]).first()
-    if existing_admin:
-        print(f"Admin user '{DEFAULT_ADMIN['username']}' already exists.")
-        return existing_admin
+    print(f"Checking for existing admin user: {DEFAULT_ADMIN['username']}...")
+    try:
+        existing_admin = db.query(User).filter(User.username == DEFAULT_ADMIN["username"]).first()
+    except Exception as e:
+        print("\n!!! Database Error Encountered !!!")
+        print("This likely means your User model definition in models.py does not match")
+        print("the actual 'users' table schema in your database.")
+        print(f"Specific Error: {e}")
+        print("Please run database migrations (e.g., using Alembic) to align them.")
+        print("Aborting seed process.")
+        return None # Return None to signal main function to stop
 
-    # Create admin user
-    admin_user = User(
-        username=DEFAULT_ADMIN["username"],
-        email=DEFAULT_ADMIN["email"],
-        hashed_password=hash_password(DEFAULT_ADMIN["password"]),
-        is_admin=DEFAULT_ADMIN["is_admin"]
-    )
-    db.add(admin_user)
-    db.flush() # Flush to get ID if needed, commit happens later
-    print(f"Created admin user: {admin_user.username}")
-    return admin_user
+    if existing_admin:
+        print(f"Found existing admin user \'{DEFAULT_ADMIN['username']}\'.")
+        return existing_admin
+    else:
+        # If admin user doesn't exist, print error and return None. Do not create.
+        print(f"Error: Admin user \'{DEFAULT_ADMIN['username']}\' not found.")
+        print("Please create this user through the application's normal signup process first.")
+        print("Aborting seed process.")
+        return None
 
 def seed_exercises(db: Session, admin_user: User):
     """Seed the database with exercises from exercise_library_list.json."""
@@ -257,10 +262,16 @@ def main():
             print("Clearing existing data...")
             clear_tables(db) # This function already commits the deletes
 
-        # Seed users
-        print("Seeding users...")
-        admin_user = seed_users(db) # This function flushes, commit happens below
+        # --- Check for Admin User ---
+        print("Looking for admin user...")
+        admin_user = seed_users(db)
 
+        # --- Stop if Admin User Not Found ---
+        if admin_user is None:
+            # Error message is printed within seed_users
+            sys.exit(1) # Exit script
+
+        # --- Proceed with Seeding Exercises and Plans ---
         # Seed exercises from JSON
         print("Seeding exercises...")
         exercise_dict = seed_exercises(db, admin_user) # Returns dict keyed by name, flushes new
@@ -277,7 +288,7 @@ def main():
 
     except Exception as e:
         db.rollback()
-        print(f"Error seeding database: {e}")
+        print(f"An unexpected error occurred during seeding: {e}")
         # Consider more detailed error logging or re-raising depending on context
         import traceback
         traceback.print_exc()

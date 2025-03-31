@@ -83,15 +83,15 @@ A self-hosted workout tracking application that helps users track their workout 
 
 ### First-Time Setup
 
-1.  **Run the Database Seeding Script (Optional but Recommended):**
-    After the containers are running, populate the database with the default exercise library and sample workout plans. Open a new terminal in the project root directory and run:
+1.  **Create the Admin User:**
+    Access the frontend (http://localhost:3000) and follow the prompts to create your initial administrator account. **Make sure to use the username `admin`** for this first account, as the seed script requires it.
+
+2.  **Run the Database Seeding Script (Optional but Recommended):**
+    After creating the `admin` user, you can populate the database with the default exercise library and sample workout plans. Open a new terminal in the project root directory and run:
     ```bash
     docker compose exec backend python -m app.seed_data.seed_db
     ```
     > Note: If you prefer a clean slate, you can skip this step and add exercises/plans manually via the application interface later.
-
-2.  **Create an Admin Account:**
-    Access the frontend (http://localhost:3000) and follow the prompts to create your initial administrator account.
 
 3.  **Explore:**
     Log in and start exploring! You can add more exercises, create your own workout plans, or start tracking sessions based on the seeded plans.
