@@ -33,15 +33,19 @@ app = FastAPI(
 )
 
 # Get CORS settings from environment with fallback for development
-allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+# The split(",") creates a list of strings from the comma-separated env var
+allowed_origins_list = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
+# Print loaded origins for debugging (optional, can be removed later)
+print(f"Configuring CORS with allowed origins: {allowed_origins_list}")
 
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost:3000", "http://127.0.0.1:3000", "http://192.168.123.60:3000"],
+    allow_origins=allowed_origins_list,  # <-- Use the variable loaded from .env
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],  # Allows all methods
+    allow_headers=["*"],  # Allows all headers
 )
 
 # Include routers
