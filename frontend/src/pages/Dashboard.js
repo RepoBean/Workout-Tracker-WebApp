@@ -253,7 +253,7 @@ const Dashboard = () => {
                 size="large"
                 fullWidth
                 startIcon={<StartIcon />}
-                onClick={() => navigate(`/workout-sessions/${inProgressSession ? `${inProgressSession.id}/resume` : `new?plan_id=${nextWorkout.id}`}`)}
+                onClick={() => navigate(`/workout-sessions/${inProgressSession ? `${inProgressSession.id}/resume` : `new?workout_plan_id=${nextWorkout.id}`}`)}
                 sx={{ 
                   bgcolor: 'background.paper', 
                   color: 'primary.main',

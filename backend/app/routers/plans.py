@@ -6,7 +6,7 @@ import json
 from fastapi import File, UploadFile, Response, Form
 
 from app.database import get_db
-from app.models.models import WorkoutPlan, PlanExercise, Exercise, User
+from app.models.models import WorkoutPlan, PlanExercise, Exercise, User, UserProgramProgress
 from app.schemas.workout_plan import (
     WorkoutPlanCreate, 
     WorkoutPlanUpdate, 
@@ -18,22 +18,6 @@ from app.schemas.workout_plan import (
 from app.services.auth import get_current_active_user
 
 router = APIRouter()
-
-# Add weight conversion utility function
-def convert_weight(weight, from_unit, to_unit="kg"):
-    """Convert weight between lbs and kg."""
-    if weight is None or weight == 0:
-        return 0
-        
-    if from_unit.lower() == to_unit.lower():
-        return weight
-        
-    if from_unit.lower() == "lbs" and to_unit.lower() == "kg":
-        return round(weight * 0.453592, 2)  # lb to kg
-    elif from_unit.lower() == "kg" and to_unit.lower() == "lbs":
-        return round(weight * 2.20462, 2)  # kg to lb
-        
-    return weight  # Default case - no conversion
 
 @router.post("", response_model=WorkoutPlanResponse)
 async def create_workout_plan(
@@ -82,7 +66,6 @@ async def create_workout_plan(
                 sets=exercise_data.sets,
                 reps=exercise_data.reps,
                 rest_seconds=exercise_data.rest_seconds,
-                target_weight=exercise_data.target_weight,
                 order=exercise_data.order if exercise_data.order is not None else i,
                 day_of_week=exercise_data.day_of_week,
                 progression_type=exercise_data.progression_type,
@@ -298,9 +281,20 @@ async def update_workout_plan(
     if plan_update.description is not None:
         db_plan.description = plan_update.description
     if plan_update.is_public is not None:
+        # Prevent making a plan private if it's the active plan for other users
+        if not plan_update.is_public and db_plan.is_public:
+            active_users = db.query(User).filter(User.active_plan_id == plan_id).count()
+            if active_users > 1 or (active_users == 1 and db_plan.owner_id != current_user.id):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot make plan private, it is active for other users"
+                )
         db_plan.is_public = plan_update.is_public
-    if plan_update.is_active is not None:
-        db_plan.is_active = plan_update.is_active
+    
+    # Note: is_active is handled by the activate endpoint, not here
+    # if plan_update.is_active is not None:
+    #     db_plan.is_active = plan_update.is_active
+
     if plan_update.days_per_week is not None:
         db_plan.days_per_week = plan_update.days_per_week
     if plan_update.duration_weeks is not None:
@@ -397,7 +391,6 @@ async def add_exercise_to_plan(
         sets=exercise.sets,
         reps=exercise.reps,
         rest_seconds=exercise.rest_seconds,
-        target_weight=exercise.target_weight,
         order=order,
         day_of_week=exercise.day_of_week,
         progression_type=exercise.progression_type,
@@ -457,8 +450,6 @@ async def update_plan_exercise(
         db_plan_exercise.reps = exercise_update.reps
     if exercise_update.rest_seconds is not None:
         db_plan_exercise.rest_seconds = exercise_update.rest_seconds
-    if exercise_update.target_weight is not None:
-        db_plan_exercise.target_weight = exercise_update.target_weight
     if exercise_update.order is not None:
         db_plan_exercise.order = exercise_update.order
     if exercise_update.day_of_week is not None:
@@ -626,7 +617,6 @@ async def clone_workout_plan(
             sets=exercise.sets,
             reps=exercise.reps,
             rest_seconds=exercise.rest_seconds,
-            target_weight=exercise.target_weight,
             order=exercise.order,
             day_of_week=exercise.day_of_week,
             progression_type=exercise.progression_type,
@@ -667,14 +657,136 @@ async def activate_workout_plan(
             detail="Not authorized to activate this workout plan"
         )
     
-    # Set as the user's active plan
-    current_user.active_plan_id = plan_id
-    db.commit()
-    
-    # Add is_active_for_current_user flag for response
-    db_plan.is_active_for_current_user = True
-    
-    return db_plan
+    try:
+        # Set as the user's active plan
+        current_user.active_plan_id = plan_id
+        db.flush()  # Flush but don't commit yet
+        
+        # Add is_active_for_current_user flag for response
+        db_plan.is_active_for_current_user = True
+        
+        # Get plan exercises to return with the response
+        plan_exercises = db.query(PlanExercise).filter(
+            PlanExercise.workout_plan_id == plan_id
+        ).order_by(PlanExercise.order).all()
+        
+        # Fetch all exercises at once
+        exercise_ids = [pe.exercise_id for pe in plan_exercises]
+        exercises = db.query(Exercise).filter(Exercise.id.in_(exercise_ids)).all()
+        exercise_map = {ex.id: ex for ex in exercises}
+        
+        # Process the plan exercises with exercise details
+        for plan_exercise in plan_exercises:
+            exercise = exercise_map.get(plan_exercise.exercise_id)
+            if exercise:
+                # Set the ORM relationship
+                plan_exercise.exercise = exercise
+                
+                # Add the name and other fields directly to the plan_exercise
+                plan_exercise.name = exercise.name
+                plan_exercise.muscle_group = exercise.muscle_group
+                plan_exercise.category = exercise.category
+                plan_exercise.equipment = exercise.equipment
+                plan_exercise.description = exercise.description
+                
+                # Also add the exercise_details dictionary for frontend use
+                plan_exercise.exercise_details = {
+                    "id": exercise.id,
+                    "name": exercise.name,
+                    "muscle_group": exercise.muscle_group,
+                    "category": exercise.category,
+                    "equipment": exercise.equipment,
+                    "description": exercise.description
+                }
+            else:
+                # Set default values for missing exercises
+                plan_exercise.name = f"Unknown Exercise ({plan_exercise.exercise_id})"
+                plan_exercise.muscle_group = "Unknown"
+                plan_exercise.category = "Unknown"
+                plan_exercise.equipment = None
+                plan_exercise.description = None
+                
+                plan_exercise.exercise_details = {
+                    "id": plan_exercise.exercise_id,
+                    "name": f"Unknown Exercise ({plan_exercise.exercise_id})",
+                    "muscle_group": "Unknown",
+                    "category": "Unknown"
+                }
+            
+            # Debug info
+            print(f"Exercise for plan: {plan_exercise.exercise_id}, name: {plan_exercise.name}")
+        
+        # Process user program progress records
+        # Create a dictionary with exercise IDs as keys for quick lookup
+        existing_progress_records = {}
+        existing_records = db.query(UserProgramProgress).filter(
+            UserProgramProgress.user_id == current_user.id,
+            UserProgramProgress.workout_plan_id == plan_id
+        ).all()
+        
+        # Map exercise_id to its respective progress record
+        for record in existing_records:
+            existing_progress_records[record.exercise_id] = record
+        
+        # Create new progress records only for exercises that don't have records yet
+        new_records = []
+        for plan_exercise in plan_exercises:
+            # Skip if this exercise already has a progress record
+            if plan_exercise.exercise_id in existing_progress_records:
+                continue
+                
+            # Find the exercise to validate it exists
+            exercise = exercise_map.get(plan_exercise.exercise_id)
+            if not exercise:
+                print(f"Warning: Exercise {plan_exercise.exercise_id} not found when activating plan {plan_id}")
+                continue
+                
+            # Debug info
+            print(f"Creating new progress record for exercise {plan_exercise.exercise_id} in plan {plan_id}")
+            
+            # Create a new progress record with null weight
+            new_progress = UserProgramProgress(
+                user_id=current_user.id,
+                workout_plan_id=plan_id,
+                exercise_id=plan_exercise.exercise_id,
+                current_weight=None,
+                current_reps=plan_exercise.reps,  # Use the target reps from the plan
+                next_weight=None,
+                next_reps=plan_exercise.reps
+            )
+            new_records.append(new_progress)
+        
+        # Add all new records at once
+        if new_records:
+            try:
+                # Use individual adds with error handling instead of bulk add
+                for record in new_records:
+                    try:
+                        db.add(record)
+                        db.flush()
+                    except Exception as e:
+                        print(f"Error adding progress record: {str(e)}")
+                        # Continue with other records if one fails
+                        db.rollback()
+            except Exception as e:
+                print(f"Error adding progress records: {str(e)}")
+                # Don't let progress record errors prevent plan activation
+                
+        # Commit all changes together
+        db.commit()
+        
+        # Also return the exercises that need weights
+        db_plan.exercises = plan_exercises
+        
+        return db_plan
+        
+    except Exception as e:
+        db.rollback()
+        print(f"Error activating workout plan: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error activating workout plan: {str(e)}"
+        )
 
 @router.get("/{plan_id}/export", response_model=None)
 async def export_workout_plan(
@@ -733,7 +845,6 @@ async def export_workout_plan(
             "sets": ex.sets,
             "reps": ex.reps,
             "rest_seconds": ex.rest_seconds,
-            "target_weight": ex.target_weight,
             "order": ex.order,
             "day_of_week": ex.day_of_week,
             "progression_type": ex.progression_type,
@@ -819,15 +930,6 @@ async def import_workout_plan(
             # Skip exercises without an ID
             continue
         
-        # Extract target weight and perform unit conversion if needed
-        target_weight = exercise_data.get("target_weight", 0)
-        
-        # Get per-exercise weight unit if specified, otherwise use the form parameter
-        ex_weight_unit = exercise_data.get("weight_unit", weight_unit)
-        
-        # Always convert to kg for storage in the database
-        converted_weight = convert_weight(target_weight, ex_weight_unit, "kg")
-        
         # Create plan exercise with converted weight
         db_plan_exercise = PlanExercise(
             workout_plan_id=new_plan.id,
@@ -835,7 +937,6 @@ async def import_workout_plan(
             sets=exercise_data.get("sets", 3),
             reps=exercise_data.get("reps", 10),
             rest_seconds=exercise_data.get("rest_seconds", 60),
-            target_weight=converted_weight,  # Use the converted weight
             order=exercise_data.get("order", i),
             day_of_week=exercise_data.get("day_of_week"),
             progression_type=exercise_data.get("progression_type", "weight"),

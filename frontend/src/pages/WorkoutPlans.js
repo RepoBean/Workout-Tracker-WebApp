@@ -45,9 +45,13 @@ import {
   Check as CheckIcon
 } from '@mui/icons-material';
 import { workoutPlansApi, handleApiError } from '../utils/api';
+import { useUnitSystem } from '../utils/unitUtils';
+import PlanActivationWeightDialog from '../components/workouts/PlanActivationWeightDialog';
+import { progressApi } from '../utils/api';
 
 const WorkoutPlans = () => {
   const navigate = useNavigate();
+  const { weightUnit } = useUnitSystem();
   const [plans, setPlans] = useState([]);
   const [filteredPlans, setFilteredPlans] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -60,7 +64,9 @@ const WorkoutPlans = () => {
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [error, setError] = useState(null);
-  const [importWeightUnit, setImportWeightUnit] = useState('lbs');
+  const [importWeightUnit, setImportWeightUnit] = useState(weightUnit);
+  const [weightDialogOpen, setWeightDialogOpen] = useState(false);
+  const [planExercises, setPlanExercises] = useState([]);
 
   // Get workout plans on mount
   useEffect(() => {
@@ -156,12 +162,12 @@ const WorkoutPlans = () => {
     }
   };
 
-  // Start a workout from a plan
+  // Start workout with selected plan
   const handleStartWorkout = () => {
-    if (selectedPlan) {
-      navigate(`/workout-sessions/new?plan_id=${selectedPlan.id}`);
-    }
+    if (!selectedPlan) return;
+    
     handleMenuClose();
+    navigate(`/workout-sessions/new?workout_plan_id=${selectedPlan.id}`);
   };
 
   // Set a plan as active
@@ -169,7 +175,7 @@ const WorkoutPlans = () => {
     if (!selectedPlan) return;
     
     try {
-      await workoutPlansApi.activate(selectedPlan.id);
+      const response = await workoutPlansApi.activate(selectedPlan.id);
       
       // Update plans to reflect the change
       setPlans(plans.map(plan => ({
@@ -177,11 +183,18 @@ const WorkoutPlans = () => {
         is_active: plan.id === selectedPlan.id
       })));
       
-      setSnackbar({
-        open: true,
-        message: 'Workout plan set as active',
-        severity: 'success'
-      });
+      // Check if we need to show the weight selection dialog
+      if (response.data.exercises && response.data.exercises.length > 0) {
+        setPlanExercises(response.data.exercises);
+        setWeightDialogOpen(true);
+      } else {
+        // Show success message if no weight selection needed
+        setSnackbar({
+          open: true,
+          message: 'Workout plan set as active',
+          severity: 'success'
+        });
+      }
     } catch (error) {
       console.error('Error setting active plan:', error);
       setSnackbar({
@@ -275,6 +288,50 @@ const WorkoutPlans = () => {
   // Handle search term change
   const handleSearchChange = (event) => {
     setSearchTerm(event.target.value);
+  };
+
+  // Handle saving weights
+  const handleSaveWeights = async (weights) => {
+    if (!selectedPlan) return;
+    
+    try {
+      // Create updates array for the API call
+      const updates = Object.entries(weights).map(([exerciseId, weight]) => ({
+        exercise_id: parseInt(exerciseId),
+        current_weight: weight
+      }));
+      
+      // Call the batch update API
+      await progressApi.batchUpdate({
+        workout_plan_id: selectedPlan.id,
+        updates: updates
+      });
+      
+      setSnackbar({
+        open: true,
+        message: 'Starting weights saved successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error saving weights:', error);
+      setSnackbar({
+        open: true,
+        message: handleApiError(error, null, 'Failed to save weights'),
+        severity: 'error'
+      });
+    }
+    
+    setWeightDialogOpen(false);
+  };
+
+  // Close weight dialog without saving
+  const handleCloseWeightDialog = () => {
+    setWeightDialogOpen(false);
+    setSnackbar({
+      open: true,
+      message: 'Workout plan set as active. You can set weights later.',
+      severity: 'info'
+    });
   };
 
   // If there's a loading state
@@ -583,6 +640,15 @@ const WorkoutPlans = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {/* Weight Selection Dialog */}
+      <PlanActivationWeightDialog
+        open={weightDialogOpen}
+        onClose={handleCloseWeightDialog}
+        exercises={planExercises}
+        onSaveWeights={handleSaveWeights}
+        planName={selectedPlan?.name || 'Plan'}
+      />
       
       {/* Snackbar for notifications */}
       <Snackbar

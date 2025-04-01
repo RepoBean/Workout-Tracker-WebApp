@@ -89,14 +89,6 @@ const EditWorkoutPlan = () => {
           const formattedExercises = plan.exercises.map(ex => {
             // Log the exercise and its weight details
             console.log(`Loading exercise from API: ${ex.name}`);
-            console.log(`- Original weight from API (kg): ${ex.target_weight}`);
-            
-            // Convert weight from kg (database) to user's preferred unit (component state)
-            let displayWeight = ex.target_weight || 0;
-            if (ex.target_weight) {
-              displayWeight = convertToPreferred(ex.target_weight, 'kg');
-              console.log(`- Converting weight to user's unit: ${ex.target_weight} kg → ${displayWeight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
-            }
             
             const formattedEx = {
               id: ex.exercise_id || ex.id,
@@ -105,7 +97,6 @@ const EditWorkoutPlan = () => {
               sets: ex.sets || 3,
               reps: ex.reps || 10,
               rest_seconds: ex.rest_seconds || 60,
-              target_weight: displayWeight,
               notes: ex.notes || '',
               order: ex.order || 0,
               plan_exercise_id: ex.id,
@@ -115,7 +106,7 @@ const EditWorkoutPlan = () => {
             return formattedEx;
           });
           
-          console.log('DEBUG - All formatted exercises:', formattedExercises);
+          console.log('DEBUG - All formatted exercises (without target weight):', formattedExercises);
           setExercises(formattedExercises);
         }
       } catch (error) {
@@ -129,27 +120,42 @@ const EditWorkoutPlan = () => {
     if (id) {
       fetchPlanDetails();
     }
-  }, [id, convertToPreferred, weightUnit]);
+  }, [id]);
   
   // Mark form as having unsaved changes when data changes
   useEffect(() => {
     if (originalPlan) {
-      const hasChanges = 
-        planName !== originalPlan.name || 
+      const originalFormatted = originalPlan.exercises?.map(ex => ({
+        id: ex.exercise_id || ex.id,
+        name: ex.name,
+        muscle_group: ex.muscle_group,
+        sets: ex.sets || 3,
+        reps: ex.reps || 10,
+        rest_seconds: ex.rest_seconds || 60,
+        notes: ex.notes || '',
+        order: ex.order || 0,
+        plan_exercise_id: ex.id,
+        day_of_week: ex.day_of_week
+      }));
+
+      const currentFormatted = exercises.map(ex => ({
+        id: ex.id,
+        name: ex.name,
+        muscle_group: ex.muscle_group,
+        sets: ex.sets,
+        reps: ex.reps,
+        rest_seconds: ex.rest_seconds,
+        notes: ex.notes,
+        order: ex.order,
+        plan_exercise_id: ex.plan_exercise_id,
+        day_of_week: ex.day_of_week
+      }));
+
+      const hasChanges =
+        planName !== originalPlan.name ||
         planDescription !== (originalPlan.description || '') ||
-        JSON.stringify(exercises) !== JSON.stringify(originalPlan.exercises?.map(ex => ({
-          id: ex.exercise_id || ex.id,
-          name: ex.name,
-          muscle_group: ex.muscle_group,
-          sets: ex.sets || 3,
-          reps: ex.reps || 10,
-          rest_seconds: ex.rest_seconds || 60,
-          notes: ex.notes || '',
-          order: ex.order || 0,
-          plan_exercise_id: ex.id,
-          day_of_week: ex.day_of_week
-        })));
-      
+        JSON.stringify(currentFormatted) !== JSON.stringify(originalFormatted);
+
       setUnsavedChanges(hasChanges);
     }
   }, [planName, planDescription, exercises, originalPlan]);
@@ -180,7 +186,6 @@ const EditWorkoutPlan = () => {
       sets: 3,
       reps: 10,
       rest_seconds: 60,
-      target_weight: 0,
       notes: '',
       day_of_week: currentDayOfWeek,
       // If the exercise already exists, don't add it again
@@ -232,11 +237,6 @@ const EditWorkoutPlan = () => {
       ...prev,
       [field]: value
     }));
-
-    // Additional debug logging to trace weight values
-    if (field === 'target_weight') {
-      console.log(`DEBUG - Exercise weight set to ${value} ${unitSystem === 'metric' ? 'kg' : 'lbs'} (stored in component state in user's preferred unit)`);
-    }
   };
   
   // Remove an exercise from the plan
@@ -324,28 +324,19 @@ const EditWorkoutPlan = () => {
       for (const exToAdd of exercisesToAdd) {
         // Log weight information for debugging
         console.log(`Adding exercise: ${exToAdd.name}`);
-        console.log(`- Current unit system: ${unitSystem}`);
-        console.log(`- Raw weight from component state: ${exToAdd.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
-        
-        // Convert weight if needed (using parseWeightInput which handles unit conversion)
-        const convertedWeight = parseWeightInput(exToAdd.target_weight, unitSystem);
         
         const exerciseData = {
           exercise_id: exToAdd.id,
           sets: exToAdd.sets,
           reps: exToAdd.reps,
           rest_seconds: exToAdd.rest_seconds,
-          target_weight: convertedWeight, // This is now in kg for storage
           order: exToAdd.order,
           day_of_week: exToAdd.day_of_week
         };
         
-        console.log('DEBUG - Adding exercise with data:', {
+        console.log('DEBUG - Adding exercise with data (no target weight):', {
           original: exToAdd,
           formatted: exerciseData,
-          conversion: unitSystem === 'imperial' ? 
-            `Converted ${exToAdd.target_weight} lbs to ${convertedWeight} kg for storage` : 
-            'No conversion needed (already in kg)'
         });
         
         await workoutPlansApi.addExercise(id, exerciseData);
@@ -355,27 +346,18 @@ const EditWorkoutPlan = () => {
       for (const exToUpdate of exercisesToUpdate) {
         // Log weight information for debugging
         console.log(`Updating exercise: ${exToUpdate.name || exToUpdate.id}`);
-        console.log(`- Current unit system: ${unitSystem}`);
-        console.log(`- Raw weight from component state: ${exToUpdate.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
-        
-        // Convert weight if needed (using parseWeightInput which handles unit conversion)
-        const convertedWeight = parseWeightInput(exToUpdate.target_weight, unitSystem);
         
         const exerciseData = {
           sets: exToUpdate.sets,
           reps: exToUpdate.reps,
           rest_seconds: exToUpdate.rest_seconds,
-          target_weight: convertedWeight, // This is now in kg for storage
           order: exToUpdate.order,
           day_of_week: exToUpdate.day_of_week
         };
         
-        console.log('DEBUG - Updating exercise with data:', {
+        console.log('DEBUG - Updating exercise with data (no target weight):', {
           original: exToUpdate,
           formatted: exerciseData,
-          conversion: unitSystem === 'imperial' ? 
-            `Converted ${exToUpdate.target_weight} lbs to ${convertedWeight} kg for storage` : 
-            'No conversion needed (already in kg)'
         });
         
         await workoutPlansApi.updateExercise(id, exToUpdate.plan_exercise_id, exerciseData);
@@ -757,24 +739,10 @@ const EditWorkoutPlan = () => {
 
               <Grid item xs={12} sm={6}>
                 <TextField
-                  label={`Target Weight (${unitSystem === 'metric' ? 'kg' : 'lbs'})`}
+                  label="Rest (seconds)"
                   type="number"
                   fullWidth
-                  value={currentExercise.target_weight || 0}
-                  onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                  InputProps={{ 
-                    inputProps: { min: 0, step: 2.5 },
-                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
-                  }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label="Rest Time (seconds)"
-                  type="number"
-                  fullWidth
-                  value={currentExercise.rest_seconds}
+                  value={currentExercise?.rest_seconds || ''}
                   onChange={(e) => handleExerciseConfigChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
                   InputProps={{ inputProps: { min: 0 } }}
                 />

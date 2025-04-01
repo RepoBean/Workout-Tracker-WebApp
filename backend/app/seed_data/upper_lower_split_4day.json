@@ -1,0 +1,97 @@
+{
+  "name": "Upper/Lower Split 4-Day",
+  "description": "A 4-day split routine focusing on upper body twice and lower body twice per week.",
+  "days_per_week": 4,
+  "duration_weeks": 8,
+  "is_public": true,
+  "exercises": [
+    {
+      "exercise_name": "Barbell Bench Press",
+      "sets": 3, "reps": 6, "rest_seconds": 90, "order": 1, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Barbell Row",
+      "sets": 3, "reps": 8, "rest_seconds": 75, "order": 2, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Bench Press",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Lat Pulldown (Wide Grip)",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 4, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Lateral Raise",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 5, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Cable Face Pull",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 6, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Barbell Squat (Back Squat)",
+      "sets": 3, "reps": 6, "rest_seconds": 120, "order": 1, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Romanian Deadlift (Barbell)",
+      "sets": 3, "reps": 8, "rest_seconds": 90, "order": 2, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Leg Press Machine",
+      "sets": 3, "reps": 10, "rest_seconds": 75, "order": 3, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Seated Leg Curl Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 4, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Calf Raise (Machine - Standing)",
+      "sets": 4, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Overhead Press (Barbell)",
+      "sets": 3, "reps": 6, "rest_seconds": 90, "order": 1, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Pull-Up",
+      "sets": 3, "reps": 6, "rest_seconds": 75, "order": 2, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Dumbbell Bench Press",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Seated Cable Row",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 4, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Barbell Curl",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Cable Triceps Pushdown (Straight Bar)",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 6, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Deadlift (Conventional)",
+      "sets": 1, "reps": 5, "rest_seconds": 180, "order": 1, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Front Squat",
+      "sets": 3, "reps": 8, "rest_seconds": 120, "order": 2, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Good Morning",
+      "sets": 3, "reps": 10, "rest_seconds": 75, "order": 3, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Leg Extension Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 4, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Calf Raise (Machine - Seated)",
+      "sets": 4, "reps": 15, "rest_seconds": 45, "order": 5, "day_of_week": 5
+    }
+  ]
+} 

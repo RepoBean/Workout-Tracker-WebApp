@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, Boolean
+from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Text, Boolean, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -27,6 +27,7 @@ class User(Base):
     created_exercises = relationship("Exercise", back_populates="created_by_user")
     shared_plans_owned = relationship("SharedPlan", foreign_keys="SharedPlan.owner_id", back_populates="owner")
     shared_plans_received = relationship("SharedPlan", foreign_keys="SharedPlan.shared_with_id", back_populates="shared_with")
+    program_progress = relationship("UserProgramProgress", back_populates="user", cascade="all, delete-orphan")
 
 class Exercise(Base):
     __tablename__ = "exercises"
@@ -52,6 +53,7 @@ class Exercise(Base):
     created_by_user = relationship("User", back_populates="created_exercises")
     plan_exercises = relationship("PlanExercise", back_populates="exercise")
     session_exercises = relationship("SessionExercise", back_populates="exercise")
+    user_progress = relationship("UserProgramProgress", back_populates="exercise", cascade="all, delete-orphan")
 
 class WorkoutPlan(Base):
     __tablename__ = "workout_plans"
@@ -71,6 +73,7 @@ class WorkoutPlan(Base):
     exercises = relationship("PlanExercise", back_populates="workout_plan", cascade="all, delete-orphan")
     workout_sessions = relationship("WorkoutSession", back_populates="workout_plan")
     shared_plans = relationship("SharedPlan", back_populates="plan", cascade="all, delete-orphan")
+    user_progress = relationship("UserProgramProgress", back_populates="workout_plan", cascade="all, delete-orphan")
 
 class PlanExercise(Base):
     __tablename__ = "plan_exercises"
@@ -119,9 +122,6 @@ class SessionExercise(Base):
     sets_completed = Column(Integer, default=0)
     order = Column(Integer)
     notes = Column(Text, nullable=True)
-    # Add columns for plan-specific exercise details
-    target_weight = Column(Float, nullable=True)
-    target_reps = Column(Integer, nullable=True)
     rest_seconds = Column(Integer, nullable=True)
     sets_count = Column(Integer, nullable=True)
     
@@ -158,4 +158,28 @@ class SharedPlan(Base):
     # Relationships
     plan = relationship("WorkoutPlan", back_populates="shared_plans")
     owner = relationship("User", foreign_keys=[owner_id], back_populates="shared_plans_owned")
-    shared_with = relationship("User", foreign_keys=[shared_with_id], back_populates="shared_plans_received") 
+    shared_with = relationship("User", foreign_keys=[shared_with_id], back_populates="shared_plans_received")
+
+# New table for user-specific progress tracking
+class UserProgramProgress(Base):
+    __tablename__ = "user_program_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    workout_plan_id = Column(Integer, ForeignKey("workout_plans.id", ondelete="CASCADE"), nullable=False)
+    exercise_id = Column(Integer, ForeignKey("exercises.id", ondelete="CASCADE"), nullable=False)
+    current_weight = Column(Float, nullable=True) # Stores weight in kg
+    current_reps = Column(Integer, nullable=True)
+    next_weight = Column(Float, nullable=True) # Stores weight in kg (calculated for next session)
+    next_reps = Column(Integer, nullable=True) # Calculated for next session
+    progression_status = Column(Integer, default=0, nullable=False) # Count of successful completions towards threshold
+    last_updated = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    # Relationships
+    user = relationship("User", back_populates="program_progress")
+    workout_plan = relationship("WorkoutPlan", back_populates="user_progress")
+    exercise = relationship("Exercise", back_populates="user_progress")
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'workout_plan_id', 'exercise_id', name='_user_plan_exercise_uc'),
+    ) 

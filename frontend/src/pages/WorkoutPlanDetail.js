@@ -37,10 +37,11 @@ import {
   ArrowBack as ArrowBackIcon,
   ExpandMore as ExpandMoreIcon
 } from '@mui/icons-material';
-import { workoutPlansApi, handleApiError } from '../utils/api';
+import { workoutPlansApi, handleApiError, progressApi } from '../utils/api';
 import { formatDistanceToNow } from 'date-fns';
 import { useUnitSystem } from '../utils/unitUtils';
 import { useAuth } from '../contexts/AuthContext';
+import PlanActivationWeightDialog from '../components/workouts/PlanActivationWeightDialog';
 
 // Weekday names mapping
 const WEEKDAYS = [
@@ -63,6 +64,8 @@ const WorkoutPlanDetail = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [weightDialogOpen, setWeightDialogOpen] = useState(false);
+  const [planExercises, setPlanExercises] = useState([]);
   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
   const [expandedDays, setExpandedDays] = useState([]);
   
@@ -172,7 +175,7 @@ const WorkoutPlanDetail = () => {
   // Handle setting this plan as active
   const handleSetActive = async () => {
     try {
-      await workoutPlansApi.activate(id);
+      const response = await workoutPlansApi.activate(id);
       
       // Update local state
       setPlan(prev => ({
@@ -180,11 +183,18 @@ const WorkoutPlanDetail = () => {
         is_active: true
       }));
       
-      setSnackbar({
-        open: true,
-        message: 'Workout plan set as active',
-        severity: 'success'
-      });
+      // Check if we need to show the weight selection dialog
+      if (response.data.exercises && response.data.exercises.length > 0) {
+        setPlanExercises(response.data.exercises);
+        setWeightDialogOpen(true);
+      } else {
+        // Show success message if no weight selection needed
+        setSnackbar({
+          open: true,
+          message: 'Workout plan set as active',
+          severity: 'success'
+        });
+      }
     } catch (error) {
       console.error('Error setting plan as active:', error);
       setSnackbar({
@@ -193,6 +203,48 @@ const WorkoutPlanDetail = () => {
         severity: 'error'
       });
     }
+  };
+  
+  // Handle saving weights
+  const handleSaveWeights = async (weights) => {
+    try {
+      // Create updates array for the API call
+      const updates = Object.entries(weights).map(([exerciseId, weight]) => ({
+        exercise_id: parseInt(exerciseId),
+        current_weight: weight
+      }));
+      
+      // Call the batch update API with the correct parameter name
+      await progressApi.batchUpdate({
+        workout_plan_id: id,
+        updates: updates
+      });
+      
+      setSnackbar({
+        open: true,
+        message: 'Starting weights saved successfully!',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error saving weights:', error);
+      setSnackbar({
+        open: true,
+        message: handleApiError(error, null, 'Failed to save weights'),
+        severity: 'error'
+      });
+    }
+    
+    setWeightDialogOpen(false);
+  };
+
+  // Close weight dialog without saving
+  const handleCloseWeightDialog = () => {
+    setWeightDialogOpen(false);
+    setSnackbar({
+      open: true,
+      message: 'Workout plan set as active. You can set weights later.',
+      severity: 'info'
+    });
   };
   
   // Handle editing this plan
@@ -226,9 +278,9 @@ const WorkoutPlanDetail = () => {
     }
   };
   
-  // Handle starting a workout with this plan
+  // Start a new workout session with this plan
   const handleStartWorkout = () => {
-    navigate(`/workout-sessions/new?plan_id=${id}`);
+    navigate(`/workout-sessions/new?workout_plan_id=${id}`);
   };
   
   // Close snackbar
@@ -470,6 +522,15 @@ const WorkoutPlanDetail = () => {
         )}
       </Box>
       
+      {/* Weight Selection Dialog */}
+      <PlanActivationWeightDialog
+        open={weightDialogOpen}
+        onClose={handleCloseWeightDialog}
+        exercises={planExercises}
+        onSaveWeights={handleSaveWeights}
+        planName={plan?.name || 'Plan'}
+      />
+      
       {/* Delete confirmation dialog */}
       <Dialog
         open={deleteDialogOpen}
@@ -495,7 +556,11 @@ const WorkoutPlanDetail = () => {
         autoHideDuration={6000}
         onClose={handleCloseSnackbar}
       >
-        <Alert onClose={handleCloseSnackbar} severity={snackbar.severity}>
+        <Alert 
+          onClose={handleCloseSnackbar} 
+          severity={snackbar.severity}
+          variant="filled"
+        >
           {snackbar.message}
         </Alert>
       </Snackbar>

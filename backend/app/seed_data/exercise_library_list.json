@@ -918,5 +918,45 @@
     "category": "Isolation",
     "equipment": "Dumbbells",
     "description": "Bicep curl variation involving wrist rotation to also target forearms"
+  },
+  {
+    "id": 116,
+    "name": "Incline Dumbbell Press",
+    "muscle_group": "Chest",
+    "category": "Compound",
+    "equipment": "Dumbbells",
+    "description": "Dumbbell press on an incline bench, emphasizing the upper chest."
+  },
+  {
+    "id": 117,
+    "name": "Dumbbell Rear Delt Raise",
+    "muscle_group": "Shoulders",
+    "category": "Isolation",
+    "equipment": "Dumbbells",
+    "description": "Isolation exercise targeting the posterior deltoids using dumbbells."
+  },
+  {
+    "id": 118,
+    "name": "Shoulder Press Machine",
+    "muscle_group": "Shoulders",
+    "category": "Compound",
+    "equipment": "Machine",
+    "description": "Machine-based shoulder press for controlled movement."
+  },
+  {
+    "id": 119,
+    "name": "Bicep Curl Machine",
+    "muscle_group": "Arms",
+    "category": "Isolation",
+    "equipment": "Machine",
+    "description": "Machine-based bicep curl for isolating the biceps."
+  },
+  {
+    "id": 120,
+    "name": "Lying Leg Raise",
+    "muscle_group": "Core",
+    "category": "Isolation",
+    "equipment": "Bodyweight",
+    "description": "Core exercise performed lying down, targeting lower abdominals."
   }
 ]

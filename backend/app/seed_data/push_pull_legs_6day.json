@@ -1,0 +1,129 @@
+{
+  "name": "Push/Pull/Legs (PPL) 6-Day",
+  "description": "Classic PPL split hitting each muscle group twice per week. Suitable for intermediate/advanced lifters.",
+  "days_per_week": 6,
+  "duration_weeks": 6,
+  "is_public": true,
+  "exercises": [
+    {
+      "exercise_name": "Barbell Bench Press",
+      "sets": 4, "reps": 6, "rest_seconds": 90, "order": 1, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Overhead Press (Barbell)",
+      "sets": 3, "reps": 8, "rest_seconds": 75, "order": 2, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Bench Press",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Lateral Raise",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 4, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Cable Triceps Pushdown (Straight Bar)",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Deadlift (Conventional)",
+      "sets": 1, "reps": 5, "rest_seconds": 180, "order": 1, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Pull-Up",
+      "sets": 3, "reps": 6, "rest_seconds": 75, "order": 2, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Barbell Row",
+      "sets": 3, "reps": 8, "rest_seconds": 75, "order": 3, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Cable Face Pull",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 4, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Barbell Curl",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 2
+    },
+    {
+      "exercise_name": "Barbell Squat (Back Squat)",
+      "sets": 4, "reps": 6, "rest_seconds": 120, "order": 1, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Romanian Deadlift (Barbell)",
+      "sets": 3, "reps": 8, "rest_seconds": 90, "order": 2, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Leg Press Machine",
+      "sets": 3, "reps": 10, "rest_seconds": 75, "order": 3, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Seated Leg Curl Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 4, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Calf Raise (Machine - Standing)",
+      "sets": 4, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Incline Barbell Bench Press",
+      "sets": 4, "reps": 8, "rest_seconds": 75, "order": 1, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Dumbbell Overhead Press (Seated)",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 2, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Triceps Dip",
+      "sets": 3, "reps": 8, "rest_seconds": 60, "order": 3, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Cable Lateral Raise",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 4, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Dumbbell Triceps Extension (Overhead)",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 4
+    },
+    {
+      "exercise_name": "Barbell Row",
+      "sets": 4, "reps": 6, "rest_seconds": 90, "order": 1, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Lat Pulldown (Close Grip)",
+      "sets": 3, "reps": 8, "rest_seconds": 75, "order": 2, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Seated Cable Row",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Dumbbell Lateral Raise",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 4, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Dumbbell Hammer Curl",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 5, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Front Squat",
+      "sets": 4, "reps": 8, "rest_seconds": 120, "order": 1, "day_of_week": 6
+    },
+    {
+      "exercise_name": "Good Morning",
+      "sets": 3, "reps": 10, "rest_seconds": 90, "order": 2, "day_of_week": 6
+    },
+    {
+      "exercise_name": "Hack Squat Machine",
+      "sets": 3, "reps": 10, "rest_seconds": 75, "order": 3, "day_of_week": 6
+    },
+    {
+      "exercise_name": "Leg Extension Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 4, "day_of_week": 6
+    },
+    {
+      "exercise_name": "Calf Raise (Machine - Seated)",
+      "sets": 4, "reps": 15, "rest_seconds": 45, "order": 5, "day_of_week": 6
+    }
+  ]
+} 

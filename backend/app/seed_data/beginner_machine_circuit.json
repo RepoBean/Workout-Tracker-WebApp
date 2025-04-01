@@ -1,0 +1,57 @@
+{
+  "name": "Beginner Machine Circuit 3-Day",
+  "description": "A 3-day circuit using primarily machines. Good for learning movements and building confidence.",
+  "days_per_week": 3,
+  "duration_weeks": 6,
+  "is_public": true,
+  "exercises": [
+    {
+      "exercise_name": "Leg Press Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 1, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Chest Press Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 2, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Seated Cable Row",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 3, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Overhead Press (Seated)",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 4, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Leg Extension Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 1, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Seated Leg Curl Machine",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 2, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Lat Pulldown (Wide Grip)",
+      "sets": 3, "reps": 12, "rest_seconds": 60, "order": 3, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Cable Triceps Pushdown (Rope)",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 4, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Abdominal Crunch Machine",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 1, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Back Extension",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 2, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Cable Bicep Curl",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 3, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Calf Raise (Machine - Standing)",
+      "sets": 3, "reps": 15, "rest_seconds": 45, "order": 4, "day_of_week": 5
+    }
+  ]
+} 

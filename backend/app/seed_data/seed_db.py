@@ -46,7 +46,7 @@ def clear_tables(db: Session):
     db.query(PlanExercise).delete()
     db.query(WorkoutPlan).delete()
     db.query(Exercise).delete()
-    db.query(User).delete()
+    # db.query(User).delete() # Comment out this line
     db.commit()
 
 def hash_password(password: str) -> str:
@@ -57,7 +57,7 @@ def hash_password(password: str) -> str:
     return hashed.decode('utf-8')
 
 def seed_users(db: Session):
-    """Finds the first created user to associate seed data with."""
+    """Finds the first created user to associate seed data with or creates a default admin if none exists."""
     # Query for the first user based on ID
     print("Checking for the first registered user...")
     first_user = None
@@ -77,11 +77,32 @@ def seed_users(db: Session):
         print(f"Found first user '{first_user.username}' (ID: {first_user.id}). Seed data will be associated with this user.")
         return first_user
     else:
-        # If no users exist, print error and return None.
-        print(f"Error: No users found in the database.")
-        print("Please create the first user account through the application's normal signup process first.")
-        print("Aborting seed process.")
-        return None
+        # If no users exist, create a default admin user
+        print("No users found in the database. Creating a default admin user...")
+        hashed_password = hash_password(DEFAULT_ADMIN["password"])
+        
+        default_admin = User(
+            username=DEFAULT_ADMIN["username"],
+            email=DEFAULT_ADMIN["email"],
+            hashed_password=hashed_password,
+            is_active=True,
+            is_admin=DEFAULT_ADMIN["is_admin"],
+            settings={
+                "weight_unit": "kg",
+                "distance_unit": "km",
+                "theme": "light",
+                "onboarding_completed": True
+            }
+        )
+        
+        db.add(default_admin)
+        db.flush()  # Ensure the user gets an ID
+        
+        print(f"Created default admin user '{default_admin.username}' (ID: {default_admin.id}).")
+        print(f"Login with email: {DEFAULT_ADMIN['email']} and password: {DEFAULT_ADMIN['password']}")
+        print(f"IMPORTANT: Change this password after first login!")
+        
+        return default_admin
 
 def seed_exercises(db: Session, admin_user: User):
     """Seed the database with exercises from exercise_library_list.json."""
@@ -158,7 +179,13 @@ def seed_workout_plans(db: Session, admin_user: User, exercise_dict: Dict[str, E
     exercise_count = 0
 
     # List of JSON plan files to load
-    plan_files = ['test workout.json'] # Add more filenames here if needed
+    plan_files = [
+        'test workout.json', # Renamed to 'Full Body Strength 3-Day' inside the file
+        'beginner_full_body.json',
+        'beginner_machine_circuit.json',
+        'upper_lower_split_4day.json',
+        'push_pull_legs_6day.json'
+    ]
     script_dir = os.path.dirname(__file__)
 
     for plan_filename in plan_files:
@@ -221,13 +248,12 @@ def seed_workout_plans(db: Session, admin_user: User, exercise_dict: Dict[str, E
                     exercise_id=exercise.id, # Use the ID from the looked-up Exercise object
                     sets=ex_data.get("sets"),
                     reps=ex_data.get("reps"),
-                    target_weight=ex_data.get("target_weight"), # Add target_weight if present
                     rest_seconds=ex_data.get("rest_seconds"),
                     order=ex_data.get("order"),
                     day_of_week=ex_data.get("day_of_week"),
-                    progression_type=ex_data.get("progression_type"),
-                    progression_value=ex_data.get("progression_value"),
-                    progression_threshold=ex_data.get("progression_threshold")
+                    progression_type=ex_data.get("progression_type", "weight"), # Default to weight progression
+                    progression_value=ex_data.get("progression_value", 2.5), # Default progression value
+                    progression_threshold=ex_data.get("progression_threshold", 2) # Default threshold
                 )
 
                 # Validate before adding

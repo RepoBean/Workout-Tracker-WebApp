@@ -10,9 +10,13 @@ services:
       - SECRET_KEY=${SECRET_KEY:-supersecretkey}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-20160}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=workout_tracker
     depends_on:
       - db
-    command: uvicorn app.main:app --host 0.0.0.0 --reload
+    entrypoint: ["/app/entrypoint.sh"]
 
   frontend:
     build: ./frontend

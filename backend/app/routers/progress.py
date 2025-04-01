@@ -10,11 +10,23 @@ from app.models.models import (
     Exercise, 
     WorkoutSession, 
     SessionExercise, 
-    ExerciseSet
+    ExerciseSet,
+    UserProgramProgress,
+    WorkoutPlan,
+    PlanExercise
 )
 from app.services.auth import get_current_active_user
+from app.schemas.user_progress import (
+    UserProgressBatchUpdatePayload,
+    UserProgressBatchUpdateResponse,
+    UserProgressUpdateItem,
+    UserProgressResponseItem
+)
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/progress",
+    tags=["progress"]
+)
 
 @router.get("/exercises/{exercise_id}")
 async def get_exercise_progress(
@@ -387,78 +399,197 @@ async def get_workout_summary(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get a summary of workout statistics.
+    Get a summary of recent workout activity and stats.
     """
-    # Total workouts
-    total_workouts_query = (
-        db.query(func.count(WorkoutSession.id))
-        .filter(WorkoutSession.user_id == current_user.id)
-    )
-    total_workouts = total_workouts_query.scalar() or 0
-    
-    # Total volume lifted
-    total_volume_query = (
-        db.query(func.sum(ExerciseSet.weight * ExerciseSet.reps))
-        .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
-        .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-        .filter(
-            WorkoutSession.user_id == current_user.id,
-            ExerciseSet.is_warmup == False
-        )
-    )
-    total_volume = total_volume_query.scalar() or 0
-    
-    # Total exercises performed
-    total_exercises_query = (
-        db.query(func.count(func.distinct(SessionExercise.exercise_id)))
-        .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-        .filter(WorkoutSession.user_id == current_user.id)
-    )
-    total_exercises = total_exercises_query.scalar() or 0
-    
-    # Total sets performed
-    total_sets_query = (
-        db.query(func.count(ExerciseSet.id))
-        .join(SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id)
-        .join(WorkoutSession, SessionExercise.session_id == WorkoutSession.id)
-        .filter(
-            WorkoutSession.user_id == current_user.id,
-            ExerciseSet.is_warmup == False
-        )
-    )
-    total_sets = total_sets_query.scalar() or 0
-    
-    # First workout date
-    first_workout_query = (
-        db.query(func.min(WorkoutSession.start_time))
-        .filter(WorkoutSession.user_id == current_user.id)
-    )
-    first_workout = first_workout_query.scalar()
-    
-    # Last workout date
-    last_workout_query = (
-        db.query(func.max(WorkoutSession.start_time))
-        .filter(WorkoutSession.user_id == current_user.id)
-    )
-    last_workout = last_workout_query.scalar()
-    
-    # Calculate days since first workout
-    days_training = 0
-    if first_workout and last_workout:
-        days_training = (last_workout - first_workout).days + 1
-    
-    # Calculate average workouts per week
-    avg_workouts_per_week = 0
-    if days_training > 0:
-        avg_workouts_per_week = (total_workouts / days_training) * 7
-    
+    now = datetime.utcnow()
+    start_of_week = now - timedelta(days=now.weekday())
+    start_of_month = now.replace(day=1)
+
+    # Total workouts this week
+    workouts_this_week = db.query(WorkoutSession).filter(
+        WorkoutSession.user_id == current_user.id,
+        WorkoutSession.start_time >= start_of_week,
+        WorkoutSession.status == 'completed'
+    ).count()
+
+    # Total workouts this month
+    workouts_this_month = db.query(WorkoutSession).filter(
+        WorkoutSession.user_id == current_user.id,
+        WorkoutSession.start_time >= start_of_month,
+        WorkoutSession.status == 'completed'
+    ).count()
+
+    # Total volume this week (approximate)
+    volume_this_week = db.query(func.sum(ExerciseSet.weight * ExerciseSet.reps)).join(
+        SessionExercise, ExerciseSet.session_exercise_id == SessionExercise.id
+    ).join(
+        WorkoutSession, SessionExercise.session_id == WorkoutSession.id
+    ).filter(
+        WorkoutSession.user_id == current_user.id,
+        WorkoutSession.start_time >= start_of_week,
+        WorkoutSession.status == 'completed',
+        ExerciseSet.is_warmup == False,
+        ExerciseSet.weight != None
+    ).scalar() or 0
+
+    # Recent Sessions (last 5)
+    recent_sessions = db.query(WorkoutSession).filter(
+        WorkoutSession.user_id == current_user.id
+    ).order_by(desc(WorkoutSession.start_time)).limit(5).all()
+
     return {
-        "total_workouts": total_workouts,
-        "total_volume": float(total_volume) if total_volume else 0,
-        "total_exercises": total_exercises,
-        "total_sets": total_sets,
-        "first_workout": first_workout.isoformat() if first_workout else None,
-        "last_workout": last_workout.isoformat() if last_workout else None,
-        "days_training": days_training,
-        "avg_workouts_per_week": round(avg_workouts_per_week, 2)
-    } 
+        "workouts_this_week": workouts_this_week,
+        "workouts_this_month": workouts_this_month,
+        "volume_this_week": float(volume_this_week),
+        "recent_sessions": recent_sessions # Consider creating a simpler response schema here
+    }
+
+@router.post("/batch-update", response_model=UserProgressBatchUpdateResponse)
+async def batch_update_user_progress(
+    payload: UserProgressBatchUpdatePayload,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Updates multiple UserProgramProgress records for the current user 
+    based on a workout plan ID and a list of exercise updates.
+    Primarily used to set initial weights when starting a plan.
+    """
+    # Determine which plan ID to use (support both field names for backwards compatibility)
+    workout_plan_id = payload.workout_plan_id
+    if workout_plan_id is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, 
+                           detail="workout_plan_id must be provided")
+
+    # Check if plan exists first
+    plan = db.query(WorkoutPlan).filter_by(id=workout_plan_id).first()
+    if not plan:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, 
+                           detail=f"Workout plan with ID {workout_plan_id} not found")
+
+    # Check if user has access to this plan
+    if plan.owner_id != current_user.id and not plan.is_public:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                           detail="You don't have access to this workout plan")
+
+    updated_count = 0
+    not_found_exercises = []
+    failed_updates = []
+    
+    # Map of exercise IDs to updates for easier lookup
+    exercise_updates = {item.exercise_id: item for item in payload.updates}
+    exercise_ids = list(exercise_updates.keys())
+    
+    # First, get ALL existing records for these exercises
+    existing_records = db.query(UserProgramProgress).filter(
+        UserProgramProgress.user_id == current_user.id,
+        UserProgramProgress.workout_plan_id == workout_plan_id,
+        UserProgramProgress.exercise_id.in_(exercise_ids)
+    ).all()
+    
+    # Map existing records by exercise_id for easier lookup
+    existing_records_map = {record.exercise_id: record for record in existing_records}
+    
+    # Identify exercises that need new records
+    missing_exercise_ids = [
+        exercise_id for exercise_id in exercise_ids 
+        if exercise_id not in existing_records_map
+    ]
+    
+    # Create records for missing exercises
+    if missing_exercise_ids:
+        # Fetch plan exercise details for these exercises
+        plan_exercises = db.query(PlanExercise).filter(
+            PlanExercise.workout_plan_id == workout_plan_id,
+            PlanExercise.exercise_id.in_(missing_exercise_ids)
+        ).all()
+        
+        # Map plan exercises by exercise_id
+        plan_exercises_map = {pe.exercise_id: pe for pe in plan_exercises}
+        
+        # Create missing records one by one with error handling
+        for exercise_id in missing_exercise_ids:
+            try:
+                # Get update item
+                update_item = exercise_updates[exercise_id]
+                
+                # Get plan exercise for default reps if available
+                plan_exercise = plan_exercises_map.get(exercise_id)
+                target_reps = plan_exercise.reps if plan_exercise else None
+                
+                # Create new record
+                new_progress = UserProgramProgress(
+                    user_id=current_user.id,
+                    workout_plan_id=workout_plan_id,
+                    exercise_id=exercise_id,
+                    current_weight=update_item.current_weight,
+                    current_reps=update_item.current_reps or target_reps,
+                    next_weight=update_item.current_weight,  # Initialize next_weight with current_weight
+                    next_reps=update_item.current_reps or target_reps,
+                    progression_status=0
+                )
+                
+                db.add(new_progress)
+                try:
+                    db.flush()  # Try to flush each record individually
+                    updated_count += 1
+                except Exception as e:
+                    db.rollback()
+                    print(f"Error creating progress record for exercise {exercise_id}: {str(e)}")
+                    failed_updates.append(exercise_id)
+                    continue
+            except Exception as e:
+                print(f"Error processing exercise {exercise_id}: {str(e)}")
+                failed_updates.append(exercise_id)
+                continue
+    
+    # Now update existing records
+    for record in existing_records:
+        exercise_id = record.exercise_id
+        update_item = exercise_updates.get(exercise_id)
+        
+        if not update_item:
+            continue
+            
+        try:
+            update_made = False
+            # Update fields if they are provided in the request
+            if update_item.current_weight is not None and record.current_weight != update_item.current_weight:
+                record.current_weight = update_item.current_weight
+                # When setting initial weight, also set next_weight if it's not already set by progression
+                if record.next_weight is None:
+                     record.next_weight = update_item.current_weight
+                update_made = True
+
+            if update_item.current_reps is not None and record.current_reps != update_item.current_reps:
+                record.current_reps = update_item.current_reps
+                # When setting initial reps, also set next_reps if it's not already set by progression
+                if record.next_reps is None:
+                     record.next_reps = update_item.current_reps
+                update_made = True
+
+            if update_made:
+                updated_count += 1
+        except Exception as e:
+            print(f"Error updating progress record for exercise {exercise_id}: {str(e)}")
+            failed_updates.append(exercise_id)
+            continue
+    
+    # Commit all successful changes
+    try:
+        db.commit()
+        print(f"Committed {updated_count} progress updates.")
+    except Exception as e:
+        db.rollback()
+        print(f"Database error during batch update: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, 
+                          detail=f"Database error during update: {str(e)}")
+
+    # Report on failures if any
+    if failed_updates:
+        print(f"Failed to update {len(failed_updates)} exercises: {failed_updates}")
+        
+    return UserProgressBatchUpdateResponse(
+        message=f"Successfully updated {updated_count} progress records. Failed: {len(failed_updates)}",
+        updated_count=updated_count
+    ) 

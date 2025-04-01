@@ -1,5 +1,5 @@
 from pydantic import BaseModel, validator, Field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime
 
 # Plan Exercise schemas
@@ -8,7 +8,6 @@ class PlanExerciseBase(BaseModel):
     sets: int = Field(..., gt=0)
     reps: int = Field(..., gt=0)
     rest_seconds: Optional[int] = None
-    target_weight: Optional[float] = None
     order: int
     day_of_week: Optional[int] = None
     progression_type: Optional[str] = None
@@ -21,7 +20,7 @@ class PlanExerciseBase(BaseModel):
             raise ValueError("Value must be positive")
         return v
         
-    @validator('target_weight', 'progression_value', pre=True, allow_reuse=True)
+    @validator('progression_value', pre=True, allow_reuse=True)
     def validate_positive_float(cls, v):
         if v is not None and v < 0:
             raise ValueError("Value must be positive")
@@ -34,7 +33,6 @@ class PlanExerciseUpdate(BaseModel):
     sets: Optional[int] = None
     reps: Optional[int] = None
     rest_seconds: Optional[int] = None
-    target_weight: Optional[float] = None
     order: Optional[int] = None
     day_of_week: Optional[int] = None
     progression_type: Optional[str] = None
@@ -49,6 +47,7 @@ class PlanExerciseResponse(PlanExerciseBase):
     description: Optional[str] = None
     category: Optional[str] = None
     equipment: Optional[str] = None
+    exercise_details: Optional[Dict[str, Any]] = None
     
     class Config:
         from_attributes = True
@@ -83,4 +82,56 @@ class WorkoutPlanResponse(WorkoutPlanBase):
     
     class Config:
         from_attributes = True
-        arbitrary_types_allowed = True 
+        arbitrary_types_allowed = True
+
+# User Program Progress schemas
+class UserProgramProgressBase(BaseModel):
+    user_id: int
+    workout_plan_id: int
+    exercise_id: int
+    current_weight: Optional[float] = None
+    current_reps: Optional[int] = None
+    next_weight: Optional[float] = None
+    next_reps: Optional[int] = None
+    progression_status: int = 0
+
+    @validator('current_weight', 'next_weight', pre=True, allow_reuse=True)
+    def validate_positive_weight(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Weight cannot be negative")
+        return v
+
+    @validator('current_reps', 'next_reps', 'progression_status', pre=True, allow_reuse=True)
+    def validate_positive_int(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Value must be non-negative")
+        return v
+
+class UserProgramProgressCreate(UserProgramProgressBase):
+    pass
+
+class UserProgramProgressUpdate(BaseModel):
+    current_weight: Optional[float] = None
+    current_reps: Optional[int] = None
+    next_weight: Optional[float] = None
+    next_reps: Optional[int] = None
+    progression_status: Optional[int] = None
+
+    @validator('current_weight', 'next_weight', pre=True, allow_reuse=True)
+    def validate_positive_weight(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Weight cannot be negative")
+        return v
+
+    @validator('current_reps', 'next_reps', 'progression_status', pre=True, allow_reuse=True)
+    def validate_positive_int(cls, v):
+        if v is not None and v < 0:
+            raise ValueError("Value must be non-negative")
+        return v
+
+class UserProgramProgressResponse(UserProgramProgressBase):
+    id: int
+    last_updated: datetime
+
+    class Config:
+        from_attributes = True 

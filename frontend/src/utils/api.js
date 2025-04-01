@@ -3,7 +3,9 @@ import axios from 'axios';
 // Create API instance with default configuration
 const api = axios.create({
   baseURL: process.env.REACT_APP_API_URL || 
-    `http://${window.location.hostname}:8000`,
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' 
+      ? `http://localhost:8000` 
+      : `http://${window.location.hostname}:8000`),
   headers: {
     'Content-Type': 'application/json',
   },
@@ -135,6 +137,7 @@ export const progressApi = {
   getWorkoutFrequency: (period) => api.get('/api/progress/frequency', { params: { period } }),
   getVolumeProgress: (exerciseId) => api.get(`/api/progress/volume/${exerciseId}`),
   getPersonalRecords: () => api.get('/api/progress/records'),
+  batchUpdate: (updates) => api.post('/api/progress/batch-update', updates),
 };
 
 // User API

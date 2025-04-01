@@ -129,23 +129,33 @@ async def mark_onboarding_complete(
     db.commit()
     db.refresh(current_user)
 
-    # --- Refresh settings for response after db refresh --- 
+    # --- Refresh settings for response after db refresh ---
     refreshed_user_settings = {}
     if isinstance(current_user.settings, str):
         try:
             refreshed_user_settings = json.loads(current_user.settings)
         except json.JSONDecodeError:
-            refreshed_user_settings = {}
+            refreshed_user_settings = {} # Default on error
+    elif isinstance(current_user.settings, dict):
+         refreshed_user_settings = current_user.settings # Already a dict
     elif current_user.settings is None:
-         refreshed_user_settings = {}
-    
-    current_user.settings_dict = refreshed_user_settings
-    # --- End refresh settings for response --- 
-        
-    # Ensure the response model can handle settings_dict if UserResponse expects settings
-    # If UserResponse expects 'settings' as a string, this might need adjustment
-    # or the schema needs to expect a dict/any. For now, assuming it can handle it.
-    return current_user
+         refreshed_user_settings = {} # Default if None
+
+    # --- End refresh settings for response ---
+
+    # Construct the response explicitly using the schema
+    return UserResponse(
+        id=current_user.id,
+        username=current_user.username,
+        email=current_user.email,
+        is_admin=current_user.is_admin,
+        is_first_user=current_user.is_first_user,
+        has_completed_onboarding=current_user.has_completed_onboarding,
+        created_at=current_user.created_at,
+        last_login=current_user.last_login,
+        profile_picture=current_user.profile_picture,
+        settings=refreshed_user_settings # Use the deserialized dictionary here
+    )
 
 @router.get("", response_model=List[UserResponse])
 async def get_users(

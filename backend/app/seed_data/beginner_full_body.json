@@ -1,0 +1,57 @@
+{
+  "name": "Beginner Full Body 3-Day",
+  "description": "A simple 3-day full body routine focusing on compound movements. Ideal for beginners.",
+  "days_per_week": 3,
+  "duration_weeks": 6,
+  "is_public": true,
+  "exercises": [
+    {
+      "exercise_name": "Goblet Squat",
+      "sets": 3, "reps": 8, "rest_seconds": 60, "order": 1, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Barbell Bench Press",
+      "sets": 3, "reps": 8, "rest_seconds": 60, "order": 2, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Dumbbell Row (Single Arm)",
+      "sets": 3, "reps": 8, "rest_seconds": 60, "order": 3, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Plank",
+      "sets": 3, "reps": 60, "rest_seconds": 45, "order": 4, "day_of_week": 1
+    },
+    {
+      "exercise_name": "Overhead Press (Barbell)",
+      "sets": 3, "reps": 8, "rest_seconds": 60, "order": 1, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Deadlift (Conventional)",
+      "sets": 1, "reps": 5, "rest_seconds": 120, "order": 2, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Lat Pulldown (Wide Grip)",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 3
+    },
+     {
+      "exercise_name": "Hanging Knee Raise",
+      "sets": 3, "reps": 12, "rest_seconds": 45, "order": 4, "day_of_week": 3
+    },
+    {
+      "exercise_name": "Leg Press Machine",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 1, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Push-Up",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 2, "day_of_week": 5
+    },
+    {
+      "exercise_name": "Seated Cable Row",
+      "sets": 3, "reps": 10, "rest_seconds": 60, "order": 3, "day_of_week": 5
+    },
+     {
+      "exercise_name": "Dumbbell Hammer Curl",
+      "sets": 3, "reps": 10, "rest_seconds": 45, "order": 4, "day_of_week": 5
+    }
+  ]
+} 

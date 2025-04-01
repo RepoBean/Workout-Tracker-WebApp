@@ -12,7 +12,8 @@ from app.models.models import (
     WorkoutPlan, 
     PlanExercise,
     Exercise,
-    User
+    User,
+    UserProgramProgress
 )
 from app.schemas.workout_session import (
     WorkoutSessionCreate,
@@ -106,61 +107,39 @@ async def create_workout_session(
                     detail=f"Exercise with id {exercise_data.exercise_id} not found"
                 )
             
-            # If this session is from a plan, get the plan exercise details for target weight/reps
-            plan_exercise = None
-            if session.workout_plan_id:
-                # Include day_of_week in the query to get the correct plan exercise for this day
-                plan_exercise_query = db.query(PlanExercise).filter(
-                    PlanExercise.workout_plan_id == session.workout_plan_id,
-                    PlanExercise.exercise_id == exercise_data.exercise_id
-                )
-                
-                # Filter by day_of_week if provided
-                if session.day_of_week:
-                    plan_exercise_query = plan_exercise_query.filter(
-                        PlanExercise.day_of_week == session.day_of_week
-                    )
-                
-                plan_exercise = plan_exercise_query.first()
-            
             # Create session exercise
             db_session_exercise = SessionExercise(
                 session_id=db_session.id,
                 exercise_id=exercise_data.exercise_id,
                 sets_completed=exercise_data.sets_completed,
                 order=exercise_data.order if exercise_data.order is not None else i,
-                notes=exercise_data.notes
+                notes=exercise_data.notes,
+                # We are NOT setting weight/reps here as they come from UserProgramProgress
+                # We might need to decide how manually added exercises interact with progress
             )
-            
-            # No need to add extra properties like name, etc. since we'll use the relationship
-            
-            # Add plan-specific details if available - these will now be saved to the database
-            if plan_exercise:
-                db_session_exercise.target_weight = plan_exercise.target_weight
-                db_session_exercise.target_reps = plan_exercise.reps
-                db_session_exercise.rest_seconds = plan_exercise.rest_seconds
-                db_session_exercise.sets_count = plan_exercise.sets
-            
             db.add(db_session_exercise)
-            db.commit()
-            db.refresh(db_session_exercise)
-            
+            # Commit and refresh removed from here to bulk add later
+
             # Add sets if provided
             if exercise_data.sets:
+                sets_to_add = []
                 for j, set_data in enumerate(exercise_data.sets):
                     db_set = ExerciseSet(
-                        session_exercise_id=db_session_exercise.id,
+                        session_exercise_id=db_session_exercise.id, # Need ID first
                         reps=set_data.reps,
-                        weight=set_data.weight,
+                        weight=set_data.weight, # Manual weight for this set
                         set_number=set_data.set_number if set_data.set_number is not None else j + 1,
                         is_warmup=set_data.is_warmup,
                         perceived_effort=set_data.perceived_effort
                     )
-                    
-                    db.add(db_set)
-                
+                    sets_to_add.append(db_set)
+                # Commit needs db_session_exercise.id, so commit exercise first
                 db.commit()
-        
+                db.refresh(db_session_exercise)
+                # Now add sets
+                db.add_all(sets_to_add)
+                db.commit()
+
         db.refresh(db_session)
     
     # If based on a workout plan but no exercises provided, auto-populate from plan
@@ -183,41 +162,78 @@ async def create_workout_session(
         if not plan_exercises and session.day_of_week:
             print(f"Warning: No exercises found for plan {session.workout_plan_id} on day {session.day_of_week}")
         
+        session_exercises_to_add = []
+        progress_records_to_add = []
+
         for i, plan_exercise in enumerate(plan_exercises):
-            # Get the exercise details first
             exercise = db.query(Exercise).filter(Exercise.id == plan_exercise.exercise_id).first()
-            
             if not exercise:
                 print(f"WARNING: Exercise with id {plan_exercise.exercise_id} not found in database")
                 continue
-                
-            # Create the session exercise
+
+            # Find or create user progress record
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=session.workout_plan_id,
+                exercise_id=plan_exercise.exercise_id
+            ).first()
+
+            if not user_progress:
+                user_progress = UserProgramProgress(
+                    user_id=current_user.id,
+                    workout_plan_id=session.workout_plan_id,
+                    exercise_id=plan_exercise.exercise_id,
+                    current_weight=None,  # Initial weight should be set by user via frontend
+                    current_reps=plan_exercise.reps, # Initial reps from plan
+                    progression_status=0
+                )
+                progress_records_to_add.append(user_progress)
+
+            # Create the session exercise WITHOUT target weight/reps
             db_session_exercise = SessionExercise(
                 session_id=db_session.id,
                 exercise_id=plan_exercise.exercise_id,
-                sets_completed=0,  # Will be updated as user completes sets
+                sets_completed=0,
                 order=plan_exercise.order,
                 notes=None,
-                # Set plan-specific details directly in the database model
-                target_weight=plan_exercise.target_weight,
-                target_reps=plan_exercise.reps,
+                # target_weight=plan_exercise.target_weight, # Removed
+                # target_reps=plan_exercise.reps, # Removed
                 rest_seconds=plan_exercise.rest_seconds,
                 sets_count=plan_exercise.sets
             )
-            
-            db.add(db_session_exercise)
-            db.commit()
-            db.refresh(db_session_exercise)
-        
+            session_exercises_to_add.append(db_session_exercise)
+
+        # Add all new session exercises and progress records
+        db.add_all(session_exercises_to_add)
+        db.add_all(progress_records_to_add)
+        db.commit()
         db.refresh(db_session)
     
     # Reload the session with all relationships to ensure proper response
     created_session = db.query(WorkoutSession).options(
-        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise),
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.sets) # Eager load sets too
     ).filter(
         WorkoutSession.id == db_session.id
     ).first()
     
+    # Manually populate response fields from UserProgramProgress if session is plan-based
+    if created_session and created_session.workout_plan_id and created_session.exercises:
+        for sess_ex in created_session.exercises:
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=created_session.workout_plan_id,
+                exercise_id=sess_ex.exercise_id
+            ).first()
+            if user_progress:
+                # Assign attributes to the SessionExercise instance before serialization
+                sess_ex.current_weight = user_progress.current_weight
+                sess_ex.current_reps = user_progress.current_reps
+            else:
+                 # Should not happen if created correctly, but handle defensively
+                 sess_ex.current_weight = None
+                 sess_ex.current_reps = None
+
     return created_session
 
 @router.get("", response_model=List[WorkoutSessionResponse])
@@ -262,25 +278,41 @@ async def get_workout_session(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Get a specific workout session by ID.
+    Get a specific workout session by ID, including user progress data.
     """
-    # Use joinedload to efficiently load related Exercise objects
-    session = db.query(WorkoutSession).options(
-        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise)
+    # Eager load exercises, their associated exercise definition, and sets
+    db_session = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise),
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.sets)
     ).filter(
         WorkoutSession.id == session_id,
         WorkoutSession.user_id == current_user.id
     ).first()
-    
-    if not session:
+
+    if not db_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workout session not found"
         )
-    
-    # No need to load plan exercise details since they're now stored directly in the session_exercises table
-    
-    return session
+
+    # Manually populate response fields from UserProgramProgress if session is plan-based
+    if db_session.workout_plan_id and db_session.exercises:
+        for sess_ex in db_session.exercises:
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=db_session.workout_plan_id,
+                exercise_id=sess_ex.exercise_id
+            ).first()
+            if user_progress:
+                # Assign attributes to the SessionExercise instance before serialization
+                sess_ex.current_weight = user_progress.current_weight
+                sess_ex.current_reps = user_progress.current_reps
+            else:
+                 # Handle case where progress might be missing (e.g., plan modified)
+                 sess_ex.current_weight = None
+                 sess_ex.current_reps = None
+
+    return db_session
 
 @router.patch("/{session_id}", response_model=WorkoutSessionResponse)
 async def update_workout_session(
@@ -402,66 +434,85 @@ async def add_exercise_to_session(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Add an exercise to a workout session.
+    Add an exercise to an ongoing workout session.
+    If the session is linked to a plan, it fetches details from UserProgramProgress.
     """
-    # Check if session exists and user owns it
     db_session = db.query(WorkoutSession).filter(
         WorkoutSession.id == session_id,
         WorkoutSession.user_id == current_user.id
     ).first()
-    
+
     if not db_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workout session not found"
         )
-    
-    # Check if exercise exists
+
+    if db_session.end_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cannot add exercises to a completed session"
+        )
+
+    # Verify exercise exists
     db_exercise = db.query(Exercise).filter(Exercise.id == exercise.exercise_id).first()
-    
     if not db_exercise:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Exercise with id {exercise.exercise_id} not found"
         )
-    
-    # Determine order if not provided
-    if exercise.order is None:
-        # Get highest order value and add 1
-        max_order = db.query(SessionExercise).filter(
-            SessionExercise.session_id == session_id
-        ).order_by(desc(SessionExercise.order)).first()
-        
-        order = (max_order.order + 1) if max_order else 0
-    else:
-        order = exercise.order
-    
-    # Get plan exercise details if this session is from a plan
-    target_weight = None
-    target_reps = None
+
+    # Determine order for the new exercise
+    max_order = db.query(func.max(SessionExercise.order)).filter(
+        SessionExercise.session_id == session_id
+    ).scalar()
+    order = (max_order or 0) + 1
+
+    # Initialize variables from plan/progress
     rest_seconds = None
     sets_count = None
-    
+    user_progress = None
+
+    # If session is linked to a plan, get PlanExercise and UserProgramProgress details
     if db_session.workout_plan_id:
         plan_exercise_query = db.query(PlanExercise).filter(
             PlanExercise.workout_plan_id == db_session.workout_plan_id,
             PlanExercise.exercise_id == exercise.exercise_id
         )
-        
-        # Filter by day_of_week if available
+
+        # Filter by day_of_week if available in the session
         if db_session.day_of_week:
             plan_exercise_query = plan_exercise_query.filter(
                 PlanExercise.day_of_week == db_session.day_of_week
             )
-            
+
         plan_exercise = plan_exercise_query.first()
-        
+
         if plan_exercise:
-            target_weight = plan_exercise.target_weight
-            target_reps = plan_exercise.reps
             rest_seconds = plan_exercise.rest_seconds
             sets_count = plan_exercise.sets
-    
+
+            # Find or create user progress record
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=db_session.workout_plan_id,
+                exercise_id=plan_exercise.exercise_id
+            ).first()
+
+            if not user_progress:
+                user_progress = UserProgramProgress(
+                    user_id=current_user.id,
+                    workout_plan_id=db_session.workout_plan_id,
+                    exercise_id=plan_exercise.exercise_id,
+                    current_weight=None, # Needs to be set by user
+                    current_reps=plan_exercise.reps, # Initial reps from plan
+                    progression_status=0
+                )
+                db.add(user_progress)
+                # Commit progress immediately so it's available for the response
+                db.commit()
+                db.refresh(user_progress)
+
     # Create new session exercise
     db_session_exercise = SessionExercise(
         session_id=session_id,
@@ -469,17 +520,18 @@ async def add_exercise_to_session(
         sets_completed=exercise.sets_completed,
         order=order,
         notes=exercise.notes,
-        target_weight=target_weight,
-        target_reps=target_reps,
-        rest_seconds=rest_seconds,
-        sets_count=sets_count
+        # target_weight and target_reps are removed from here
+        rest_seconds=rest_seconds, # Get from plan_exercise if available
+        sets_count=sets_count # Get from plan_exercise if available
     )
-    
+
     db.add(db_session_exercise)
     db.commit()
-    
+    db.refresh(db_session_exercise) # Refresh to get the ID
+
     # Add sets if provided
     if exercise.sets:
+        sets_to_add = []
         for i, set_data in enumerate(exercise.sets):
             db_set = ExerciseSet(
                 session_exercise_id=db_session_exercise.id,
@@ -489,19 +541,30 @@ async def add_exercise_to_session(
                 is_warmup=set_data.is_warmup,
                 perceived_effort=set_data.perceived_effort
             )
-            
-            db.add(db_set)
-        
+            sets_to_add.append(db_set)
+        db.add_all(sets_to_add)
         db.commit()
-    
-    # Reload the session exercise with exercise relationship
-    session_exercise = db.query(SessionExercise).options(
-        joinedload(SessionExercise.exercise)
+        db.refresh(db_session_exercise) # Refresh again to potentially load sets relationship
+
+    # Reload the session exercise with exercise relationship for the response
+    # And manually add progress data for the response schema
+    session_exercise_response = db.query(SessionExercise).options(
+        joinedload(SessionExercise.exercise),
+        joinedload(SessionExercise.sets)
     ).filter(
         SessionExercise.id == db_session_exercise.id
     ).first()
-    
-    return session_exercise
+
+    # Populate progress fields for the response
+    if user_progress:
+        session_exercise_response.current_weight = user_progress.current_weight
+        session_exercise_response.current_reps = user_progress.current_reps
+    else:
+        # If not plan based or no progress found (shouldn't happen if created above)
+        session_exercise_response.current_weight = None
+        session_exercise_response.current_reps = None
+
+    return session_exercise_response
 
 @router.put("/{session_id}/exercises/{exercise_id}", response_model=SessionExerciseResponse)
 async def update_session_exercise(
@@ -795,24 +858,149 @@ async def end_workout_session(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    End a workout session by setting the end_time to now.
+    Mark a workout session as completed and apply progression logic.
     """
-    db_session = db.query(WorkoutSession).filter(
+    db_session = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises)
+        .joinedload(SessionExercise.sets) # Eager load sets for progression check
+    ).filter(
         WorkoutSession.id == session_id,
         WorkoutSession.user_id == current_user.id
     ).first()
-    
+
     if not db_session:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Workout session not found"
         )
-    
-    # Set end time to now and status to completed
+
+    if db_session.end_time:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Workout session already ended"
+        )
+
+    # Update session status and end time
     db_session.end_time = func.now()
     db_session.status = "completed"
-    
+
+    # Apply progression logic if the session is linked to a plan
+    if db_session.workout_plan_id:
+        progress_updates = [] # Collect progress records to update
+
+        for sess_ex in db_session.exercises:
+            # Find the corresponding PlanExercise for progression rules
+            plan_exercise_query = db.query(PlanExercise).filter(
+                PlanExercise.workout_plan_id == db_session.workout_plan_id,
+                PlanExercise.exercise_id == sess_ex.exercise_id
+            )
+            if db_session.day_of_week:
+                plan_exercise_query = plan_exercise_query.filter(
+                    PlanExercise.day_of_week == db_session.day_of_week
+                )
+            plan_exercise = plan_exercise_query.first()
+
+            # Find the UserProgramProgress record
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=db_session.workout_plan_id,
+                exercise_id=sess_ex.exercise_id
+            ).first()
+
+            if not plan_exercise or not user_progress:
+                print(f"Skipping progression for exercise {sess_ex.exercise_id}: Missing plan or progress data.")
+                continue # Skip if plan exercise or progress data is missing
+
+            # --- Progression Check Logic --- 
+            # Define success criteria (adjust as needed)
+            # Assumption: Success = completed all target sets (sets_count) 
+            #             with at least the target reps (current_reps) 
+            #             using the target weight (current_weight)
+            target_sets = sess_ex.sets_count or plan_exercise.sets
+            target_reps = user_progress.current_reps or plan_exercise.reps
+            target_weight = user_progress.current_weight # Weight must match exactly if set
+            
+            completed_sets_count = 0
+            successful_sets_count = 0
+            actual_sets = [s for s in sess_ex.sets if not s.is_warmup] # Exclude warmups
+            
+            for actual_set in actual_sets:
+                completed_sets_count += 1
+                set_successful = True
+                # Check reps
+                if actual_set.reps < target_reps:
+                    set_successful = False
+                # Check weight if target weight is defined
+                if target_weight is not None and actual_set.weight != target_weight:
+                    set_successful = False
+                    
+                if set_successful:
+                    successful_sets_count += 1
+
+            # Check if all target sets were completed successfully
+            was_successful_this_session = (completed_sets_count >= target_sets and 
+                                           successful_sets_count >= target_sets)
+
+            if was_successful_this_session:
+                user_progress.progression_status += 1
+                print(f"Progression status for exercise {sess_ex.exercise_id} increased to {user_progress.progression_status}")
+
+                # Check if threshold is met
+                if plan_exercise.progression_threshold and user_progress.progression_status >= plan_exercise.progression_threshold:
+                    print(f"Progression threshold met for exercise {sess_ex.exercise_id}!")
+                    prog_type = plan_exercise.progression_type
+                    prog_value = plan_exercise.progression_value or 0
+                    next_weight = user_progress.current_weight
+                    next_reps = user_progress.current_reps
+
+                    if prog_type == "weight":
+                        next_weight = (next_weight or 0) + prog_value
+                    elif prog_type == "reps":
+                        next_reps = (next_reps or 0) + int(prog_value) # Assume whole number for reps
+                    # Add more complex progression types later (e.g., weight_then_reps)
+                    
+                    # Update the user's progress for the *next* session
+                    user_progress.next_weight = next_weight
+                    user_progress.next_reps = next_reps
+                    user_progress.current_weight = next_weight # Update current for next time
+                    user_progress.current_reps = next_reps   # Update current for next time
+                    user_progress.progression_status = 0 # Reset status
+                    print(f"  - New target for next session: Weight={next_weight}, Reps={next_reps}")
+            else:
+                # Optional: Reset progression status if session was not successful?
+                # user_progress.progression_status = 0 
+                print(f"Progression status not increased for exercise {sess_ex.exercise_id}")
+                # Ensure next weight/reps are reset if progression wasn't made
+                user_progress.next_weight = user_progress.current_weight
+                user_progress.next_reps = user_progress.current_reps
+
+            progress_updates.append(user_progress)
+
+    # Commit session end time and all progress updates
     db.commit()
-    db.refresh(db_session)
-    
-    return db_session 
+    db.refresh(db_session) # Refresh to get updated end_time
+
+    # Reload session with relationships for the response, including progress
+    updated_session = db.query(WorkoutSession).options(
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.exercise),
+        joinedload(WorkoutSession.exercises).joinedload(SessionExercise.sets)
+    ).filter(
+        WorkoutSession.id == db_session.id
+    ).first()
+
+    # Manually populate response fields from UserProgramProgress
+    if updated_session and updated_session.workout_plan_id and updated_session.exercises:
+        for sess_ex in updated_session.exercises:
+            user_progress = db.query(UserProgramProgress).filter_by(
+                user_id=current_user.id,
+                workout_plan_id=updated_session.workout_plan_id,
+                exercise_id=sess_ex.exercise_id
+            ).first()
+            if user_progress:
+                sess_ex.current_weight = user_progress.current_weight
+                sess_ex.current_reps = user_progress.current_reps
+            else:
+                sess_ex.current_weight = None
+                sess_ex.current_reps = None
+
+    return updated_session 

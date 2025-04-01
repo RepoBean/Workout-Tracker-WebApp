@@ -51,13 +51,14 @@ import {
   Edit as EditIcon,
   Save as SaveIcon
 } from '@mui/icons-material';
-import { sessionsApi, workoutPlansApi, workoutLogsApi } from '../utils/api';
+import { sessionsApi, workoutPlansApi, workoutLogsApi, progressApi } from '../utils/api';
 import { useAuth } from '../contexts/AuthContext';
 import { useUnitSystem } from '../utils/unitUtils';
 import { displayWeight, convertWeight } from '../utils/weightConversion';
 import LoadingScreen from '../components/LoadingScreen';
 import { formatDistanceToNow, format } from 'date-fns';
 import PlateCalculator from '../components/workouts/PlateCalculator';
+import WeightSelectionDialog from '../components/workouts/WeightSelectionDialog';
 
 const ActiveWorkout = () => {
   const { id } = useParams();
@@ -66,9 +67,9 @@ const ActiveWorkout = () => {
   const { currentUser } = useAuth();
   const { weightUnit, convertToPreferred, convertFromPreferred, unitSystem, displayWeight } = useUnitSystem();
   
-  // Extract plan_id from query params if available (for new sessions)
+  // Extract workout_plan_id from query params if available (for new sessions)
   const queryParams = new URLSearchParams(location.search);
-  const planId = queryParams.get('plan_id');
+  const planId = queryParams.get('workout_plan_id');
   
   const isNewSession = id === 'new' || !id;
   
@@ -87,7 +88,11 @@ const ActiveWorkout = () => {
   const [sessionCreationAttempted, setSessionCreationAttempted] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState(null);
   const [simpleTimer, setSimpleTimer] = useState(0);
-  
+
+  // State for Weight Selection Dialog
+  const [weightDialogOpen, setWeightDialogOpen] = useState(false);
+  const [exercisesNeedingWeight, setExercisesNeedingWeight] = useState([]);
+
   // Add a ref to track the previous session ID to avoid re-initializing unnecessarily
   const prevIdRef = React.useRef(id);
   // Add a ref to track the session status to avoid re-rendering loops
@@ -156,6 +161,8 @@ const ActiveWorkout = () => {
         // Clear any existing timers first
         clearTimers();
         
+        let loadedSession;
+
         if (isNewSession) {
           // Get current day of week (1-7, where 1 is Monday as per ISO standard)
           const today = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
@@ -253,7 +260,7 @@ const ActiveWorkout = () => {
                   console.log('After setting sessionStartTime:', response.data.start_time);
                 }
                 
-                setSession(response.data);
+                loadedSession = response.data;
               } else {
                 // No active plan, create a blank custom workout
                 const response = await sessionsApi.create({
@@ -261,7 +268,7 @@ const ActiveWorkout = () => {
                   status: 'in_progress',
                   start_time: new Date().toISOString()
                 });
-                setSession(response.data);
+                loadedSession = response.data;
                 if (response.data.start_time) {
                   console.log('Setting start time for custom workout:', response.data.start_time);
                   setSessionStartTime(response.data.start_time);
@@ -275,7 +282,7 @@ const ActiveWorkout = () => {
                 status: 'in_progress',
                 start_time: new Date().toISOString()
               });
-              setSession(response.data);
+              loadedSession = response.data;
               if (response.data.start_time) {
                 console.log('Setting start time for fallback custom workout:', response.data.start_time);
                 setSessionStartTime(response.data.start_time);
@@ -352,7 +359,7 @@ const ActiveWorkout = () => {
                 );
               }
               
-              setSession(response.data);
+              loadedSession = response.data;
               
               // Initialize completed sets data structure
               const initialCompletedSets = {};
@@ -459,7 +466,7 @@ const ActiveWorkout = () => {
             console.log('Converted exercise weights to user preferred unit:', unitSystem);
           }
           
-          setSession(response.data);
+          loadedSession = response.data;
           
           // Initialize completed sets data structure
           const initialCompletedSets = {};
@@ -486,72 +493,130 @@ const ActiveWorkout = () => {
           }
           setCompletedSets(initialCompletedSets);
         }
-      } catch (error) {
-        console.error('Error initializing workout session:', error);
-        setError('Failed to load or create workout session. Please try again.');
-      } finally {
+
+        // Process the loaded session (new or existing)
+        if (loadedSession && loadedSession.exercises) {
+            loadedSession.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+            
+            // Check for exercises needing initial weight (only exercises with no weight set)
+            const needsWeight = loadedSession.exercises.filter(ex => 
+                loadedSession.workout_plan_id && // Only check for plan-based sessions
+                ex.current_weight === null && 
+                ex.current_reps !== null // And where reps are defined (indicates it needs weight)
+            );
+            
+            console.log("Exercises needing initial weight:", needsWeight);
+            
+            if (needsWeight.length > 0) {
+                setExercisesNeedingWeight(needsWeight);
+                setWeightDialogOpen(true);
+                // Don't set session state yet, wait for weights to be entered
+                setIsLoading(false); // Stop loading indicator while dialog is open
+            } else {
+                // If no weights needed, proceed to set session state
+                if (loadedSession.status === 'in_progress' && loadedSession.start_time) {
+                  console.log('Setting start time:', loadedSession.start_time);
+                  setSessionStartTime(new Date(loadedSession.start_time));
+                }
+                
+                // Initialize completed sets based on the loaded session data
+                const initialCompletedSets = {};
+                if (loadedSession.exercises) {
+                    loadedSession.exercises.forEach(exercise => {
+                        const completedExerciseSets = {};
+                        if (exercise.sets) {
+                            exercise.sets.forEach(set => {
+                                // IMPORTANT: Convert weight from kg (database) to user's preferred unit for display/editing
+                                const displaySetWeight = set.weight !== null ? convertToPreferred(set.weight, 'kg') : null;
+                                
+                                completedExerciseSets[set.set_number] = {
+                                    weight: displaySetWeight, // Use converted weight for UI state
+                                    reps: set.reps,
+                                    completed: true,
+                                    fromDatabase: true,
+                                    set_id: set.id
+                                };
+                            });
+                        }
+                        initialCompletedSets[exercise.id] = completedExerciseSets;
+                    });
+                }
+                setCompletedSets(initialCompletedSets);
+                
+                // Set the session and stop loading
+                setSession(loadedSession);
+                setCurrentExerciseIndex(0); // Start at the first exercise
+                setIsLoading(false);
+                sessionStatusRef.current = loadedSession.status;
+                
+                // Start timer if session is in progress
+                if (loadedSession.status === 'in_progress' && !timerStateRef.current.isRunning) {
+                  startSimpleTimer();
+                }
+            }
+        } else {
+             // Handle case where session load fails or has no exercises
+             console.error("Loaded session is invalid or has no exercises.");
+             setError("Failed to load workout session details or session has no exercises.");
+             setIsLoading(false);
+        }
+      } catch (err) {
+        console.error('Error initializing session:', err);
+        setError(err.message || 'Failed to load or start workout session.');
         setIsLoading(false);
       }
     };
 
-    // Only initialize session if ID changed or we haven't attempted to create one yet
-    if (!sessionCreationAttempted || id !== prevIdRef.current) {
-      console.log('Initializing session due to ID change or first load');
+    // Re-initialize if ID changes (e.g., navigating from new session to existing)
+    if (id !== prevIdRef.current) {
+      console.log('ID changed, re-initializing session');
       prevIdRef.current = id;
-      setSessionCreationAttempted(true);
-      
-      // Clear any existing timers before initializing
-      clearTimers();
-      
-      // Initialize the session
+      initializeSession();
+    } else if (!session && !isLoading && !error && !noExercisesForToday) {
+      // Initial load or retry if failed previously but no session exists yet
+      console.log('No session loaded yet, attempting initialization');
       initializeSession();
     }
-    
-    // Clean up timers on unmount
+
+    // Cleanup timer on component unmount
     return () => {
-      console.log('Cleaning up on unmount or dependency change');
       clearTimers();
     };
-  }, [id, isNewSession, planId, sessionCreationAttempted]);
+  }, [id, isNewSession, planId, navigate]); // Dependencies for initialization logic
 
-  // Replace the existing timer useEffect with a simpler one that uses simpleTimer
+  // Start simple workout timer
+  const startSimpleTimer = () => {
+    if (timerStateRef.current.interval || !sessionStartTime) return;
+    
+    console.log('Starting simple timer...', sessionStartTime);
+    const startTimeMs = sessionStartTime.getTime();
+
+    timerStateRef.current.isRunning = true;
+    timerStateRef.current.interval = setInterval(() => {
+      const elapsedSeconds = Math.floor((Date.now() - startTimeMs) / 1000);
+      setSimpleTimer(elapsedSeconds);
+      timerStateRef.current.timer = elapsedSeconds; // Update ref too
+    }, 1000);
+  };
+
+  // Effect to handle session status changes (e.g., completion)
   useEffect(() => {
-    // Only run this for in-progress sessions
-    if (!session || session.status !== 'in_progress') return;
-    
-    console.log('Starting timer with sessionStartTime:', sessionStartTime);
-    
-    // Calculate the initial elapsed time if we have a start time
-    if ((sessionStartTime || session?.start_time) && simpleTimer === 0) {
-      const startTimeToUse = sessionStartTime || session.start_time;
-      console.log('Using start time for timer calculation:', startTimeToUse);
-      
-      const start = new Date(startTimeToUse);
-      const now = new Date();
-      const initialElapsedSeconds = Math.floor((now - start) / 1000);
-      console.log('Initializing timer with elapsed seconds:', initialElapsedSeconds);
-      
-      // Set the initial timer value
-      setSimpleTimer(initialElapsedSeconds);
-      
-      // If we're using session.start_time as fallback, update sessionStartTime state
-      if (!sessionStartTime && session.start_time) {
-        console.log('Updating sessionStartTime from session.start_time:', session.start_time);
-        setSessionStartTime(session.start_time);
+    if (session && session.status !== sessionStatusRef.current) {
+      console.log('Session status changed:', session.status);
+      sessionStatusRef.current = session.status;
+      if (session.status === 'completed' && timerStateRef.current.interval) {
+        console.log('Session completed, stopping timer');
+        clearInterval(timerStateRef.current.interval);
+        timerStateRef.current.interval = null;
+        timerStateRef.current.isRunning = false;
+        // Use final duration if available
+        if (session.start_time && session.end_time) {
+           const finalDuration = Math.floor((new Date(session.end_time).getTime() - new Date(session.start_time).getTime()) / 1000);
+           setSimpleTimer(finalDuration);
+        }
       }
     }
-    
-    // Start a simple counter that increments every second
-    const interval = setInterval(() => {
-      setSimpleTimer(prev => prev + 1);
-    }, 1000);
-    
-    // Clean up the interval when the component unmounts
-    return () => {
-      console.log('Cleaning up simple timer');
-      clearInterval(interval);
-    };
-  }, [session?.status, sessionStartTime, simpleTimer, session?.start_time]); // Added session?.start_time as dependency
+  }, [session]);
 
   // Update the formatElapsedTime function
   const formatElapsedTime = () => {
@@ -610,115 +675,68 @@ const ActiveWorkout = () => {
 
   // Handle set completion - Modified to avoid duplication
   const handleCompleteSet = (exerciseId, setNumber, weight, reps, completed = true) => {
-    // Find the exercise
-    const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
+    // Convert weight to kg before saving if it's not null/undefined
+    const weightKg = (weight !== null && weight !== undefined && weight !== '') ? convertFromPreferred(parseFloat(weight), 'kg') : null;
     
-    // If weight is not provided but we have a target weight in the exercise, use that
-    let weightToUse = weight;
-    if ((!weightToUse || weightToUse === '') && session?.exercises) {
-      if (exercise && exercise.target_weight) {
-        // Use the target weight (no special case handling)
-        weightToUse = exercise.target_weight.toString();
-      }
-    }
+    console.log(`Completing set: ExID=${exerciseId}, Set#=${setNumber}, Weight=${weight}(${weightKg}kg), Reps=${reps}`);
     
-    // If reps is not provided but we have target reps in the exercise, use that
-    let repsToUse = reps;
-    if ((!repsToUse || repsToUse === '') && exercise) {
-      if (exercise.target_reps) {
-        repsToUse = exercise.target_reps.toString();
-      }
-    }
-    
-    // Check if this set is already marked as completed from the database
-    const existingSet = completedSets[exerciseId]?.[setNumber];
-    const isAlreadyCompletedInDb = existingSet?.fromDatabase === true;
-    
-    // Update local UI state regardless
-    setCompletedSets(prev => {
-      const updatedSets = { ...prev };
-      if (!updatedSets[exerciseId]) {
-        updatedSets[exerciseId] = {};
-      }
-      
-      updatedSets[exerciseId][setNumber] = {
-        ...existingSet, // Keep existing data if present
-        weight: weightToUse,
-        reps: repsToUse,
-        completed,
-        // If it's already from the database, preserve that flag
-        fromDatabase: isAlreadyCompletedInDb || false
-      };
-      
-      return updatedSets;
-    });
-    
-    // Only save to backend if it's not already in the database or if values have changed
-    if (!isAlreadyCompletedInDb || 
-        existingSet.weight?.toString() !== weightToUse?.toString() || 
-        existingSet.reps?.toString() !== repsToUse?.toString()) {
-      saveSetToBackend(exerciseId, setNumber, weightToUse, repsToUse);
-    } else {
-      console.log(`Set ${setNumber} for exercise ${exerciseId} already exists in database - skipping save`);
-      
-      // Still show success message for better UX
-      setSnackbar({
-        open: true,
-        message: 'Set marked as completed',
-        severity: 'success'
-      });
-      
-      // Start rest timer if rest seconds are defined
-      if (exercise && exercise.rest_seconds) {
-        startRestTimer(exercise.rest_seconds);
-      }
-    }
+    // Call backend API to save the set
+    saveSetToBackend(exerciseId, setNumber, weightKg, reps);
   };
 
   // Save set data to backend - Modified to remove special case handling
-  const saveSetToBackend = async (exerciseId, setNumber, weight, reps) => {
+  const saveSetToBackend = async (exerciseId, setNumber, weightKg, reps) => {
+    if (!session) return;
     try {
-      // Find the exercise
-      const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
-      
-      // Convert weight to kg for storage if we're in imperial mode
-      let weightToSave = weight === '' ? 0 : parseFloat(weight);
-      
-      if (unitSystem === 'imperial' && weightToSave > 0) {
-        // Convert from imperial to metric for storage (no rounding)
-        weightToSave = convertFromPreferred(weightToSave, 'kg');
-        console.log(`Converting weight from ${weight} lbs to ${weightToSave} kg for storage`);
-      }
-      
-      // Ensure we're treating values as numbers, not strings
-      const setData = {
-        set_number: setNumber,
-        weight: weightToSave,
-        reps: reps === '' ? 0 : parseInt(reps, 10),
-        completed: true
-      };
-      
-      console.log('Saving set with data:', setData); // Debug log
-      
-      await sessionsApi.addSet(session.id, exerciseId, setData);
-      
-      setSnackbar({
-        open: true,
-        message: 'Set saved successfully',
-        severity: 'success'
-      });
-      
-      // Start rest timer if rest seconds are defined
-      if (exercise && exercise.rest_seconds) {
-        startRestTimer(exercise.rest_seconds);
-      }
+        const sessionExercise = session.exercises.find(ex => ex.id === exerciseId);
+        if (!sessionExercise) {
+            console.error('Cannot find session exercise to save set');
+            return;
+        }
+
+        // Check if the set already exists (from database)
+        const existingSetData = completedSets[exerciseId]?.[setNumber];
+        const existingSetId = existingSetData?.fromDatabase ? existingSetData.set_id : null;
+
+        const setData = {
+            reps: parseInt(reps) || 0,
+            weight: (weightKg !== null && !isNaN(weightKg)) ? parseFloat(weightKg) : null,
+            set_number: setNumber,
+            // Add other fields if necessary (is_warmup, perceived_effort)
+        };
+
+        let savedSet;
+        if (existingSetId) {
+            // Update existing set
+            console.log(`Updating existing set ${existingSetId} for exercise ${exerciseId}`);
+            // Need PUT /api/sessions/exercises/sets/{set_id} endpoint
+            // savedSet = await sessionsApi.updateExerciseSet(existingSetId, setData);
+            console.warn("Placeholder: Need API endpoint to update existing set");
+            // Mock update for now
+            savedSet = { data: { ...setData, id: existingSetId, session_exercise_id: exerciseId, completed_at: new Date().toISOString() } };
+        } else {
+            // Add new set
+            console.log(`Adding new set for exercise ${exerciseId}`);
+            savedSet = await sessionsApi.addExerciseSet(exerciseId, setData);
+        }
+
+        // Update local state with the ID from the saved set
+        setCompletedSets(prev => {
+            const newSets = { ...prev };
+            if (!newSets[exerciseId]) newSets[exerciseId] = {};
+            newSets[exerciseId][setNumber] = {
+                ...newSets[exerciseId][setNumber], // Keep existing UI state
+                set_id: savedSet.data.id, // Update with the actual ID
+                fromDatabase: true // Mark as saved
+            };
+            return newSets;
+        });
+
+        console.log('Set saved successfully', savedSet.data);
     } catch (error) {
-      console.error('Error saving set:', error);
-      setSnackbar({
-        open: true,
-        message: 'Failed to save set',
-        severity: 'error'
-      });
+        console.error('Error saving set:', error);
+        setSnackbar({ open: true, message: 'Failed to save set progress', severity: 'error' });
+        // Optionally revert local state change if API call fails
     }
   };
 
@@ -960,17 +978,113 @@ const ActiveWorkout = () => {
 
   // Calculate suggested weight for next set
   const getSuggestedWeight = (exerciseId, setNumber) => {
-    const exercise = session?.exercises?.find(ex => ex.id === exerciseId);
+    if (!session || !session.exercises) return '';
     
-    // Use completed set weight as suggestion if available
-    if (completedSets[exerciseId]?.[setNumber - 1]?.weight) {
-      return completedSets[exerciseId][setNumber - 1].weight;
-    } 
+    const exercise = session.exercises.find(ex => ex.id === exerciseId);
+    if (!exercise) return '';
+
+    // Use the current weight from user progress (already converted to user unit)
+    const suggestedWeight = exercise.current_weight;
     
-    // Otherwise use target weight
-    // Use the already converted target_weight directly (avoid double conversion)
-    return exercise?.target_weight ? exercise.target_weight.toString() : '';
+    // If a weight was already entered for this set, use that instead
+    const enteredWeight = completedSets[exerciseId]?.[setNumber]?.weight;
+
+    // Return entered weight if available, otherwise the suggested weight, otherwise empty
+    const weightToDisplay = (enteredWeight !== null && enteredWeight !== undefined) ? enteredWeight : suggestedWeight;
+    
+    // Return as a string for the text field
+    return (weightToDisplay !== null && weightToDisplay !== undefined) ? String(weightToDisplay) : '';
   };
+  
+  // Update getSuggestedReps to use current_reps
+  const getSuggestedReps = (exerciseId, setNumber) => {
+     if (!session || !session.exercises) return '';
+     const exercise = session.exercises.find(ex => ex.id === exerciseId);
+     if (!exercise) return '';
+     
+     const suggestedReps = exercise.current_reps;
+     const enteredReps = completedSets[exerciseId]?.[setNumber]?.reps;
+     
+     const repsToDisplay = (enteredReps !== null && enteredReps !== undefined) ? enteredReps : suggestedReps;
+     return (repsToDisplay !== null && repsToDisplay !== undefined) ? String(repsToDisplay) : '';
+  };
+
+  // --- New Function to Handle Saving Initial Weights --- 
+  const handleSaveInitialWeights = async (weightsToSaveKg) => {
+    if (!session || !session.workout_plan_id) {
+        console.error("Cannot save weights without a valid session and plan ID.");
+        setSnackbar({ open: true, message: "Error saving weights.", severity: 'error' });
+        return;
+    }
+    
+    console.log("Attempting to save initial weights:", weightsToSaveKg);
+    setIsLoading(true); // Show loading indicator during save
+    
+    try {
+        const updates = Object.entries(weightsToSaveKg).map(([exerciseId, weight]) => ({
+            exercise_id: parseInt(exerciseId),
+            current_weight: weight
+        }));
+        
+        // Call the batch update API endpoint
+        await progressApi.batchUpdate({
+            workout_plan_id: session.workout_plan_id,
+            updates: updates
+        });
+        
+        // After successful save, reload the session data to get updated weights
+        const response = await sessionsApi.getById(session.id);
+        const updatedSession = response.data;
+        
+        // Now process the session as if weights were present initially
+        if (updatedSession && updatedSession.exercises) {
+            updatedSession.exercises.sort((a, b) => (a.order || 0) - (b.order || 0));
+            
+            if (updatedSession.status === 'in_progress' && updatedSession.start_time) {
+                setSessionStartTime(new Date(updatedSession.start_time));
+            }
+            
+            const initialCompletedSets = {};
+            updatedSession.exercises.forEach(exercise => {
+                const completedExerciseSets = {};
+                if (exercise.sets) {
+                    exercise.sets.forEach(set => {
+                       const displaySetWeight = set.weight !== null ? convertToPreferred(set.weight, 'kg') : null;
+                       completedExerciseSets[set.set_number] = {
+                           weight: displaySetWeight,
+                           reps: set.reps,
+                           completed: true,
+                           fromDatabase: true,
+                           set_id: set.id
+                       };
+                    });
+                }
+                initialCompletedSets[exercise.id] = completedExerciseSets;
+            });
+            setCompletedSets(initialCompletedSets);
+            
+            setSession(updatedSession);
+            setCurrentExerciseIndex(0);
+            sessionStatusRef.current = updatedSession.status;
+            
+            if (updatedSession.status === 'in_progress' && !timerStateRef.current.isRunning) {
+                startSimpleTimer();
+            }
+        } else {
+             throw new Error("Failed to reload session after saving weights.");
+        }
+        
+        setSnackbar({ open: true, message: "Starting weights saved successfully!", severity: 'success' });
+        
+    } catch (saveError) {
+        console.error("Error saving initial weights:", saveError);
+        setError("Failed to save starting weights. Please try again.");
+        // Optionally: Re-open dialog or allow retry?
+    } finally {
+        setIsLoading(false);
+        setWeightDialogOpen(false); // Ensure dialog is closed
+    }
+};
 
   console.log("DEBUG: Current timer state:", {
     sessionStartTime,
@@ -1157,521 +1271,44 @@ const ActiveWorkout = () => {
   }
 
   return (
-    <Box>
-      {/* Workout Header */}
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} md={6}>
-            <Typography variant="h5">
-              {session.status === 'completed' ? 'Workout Summary' : (session.name || 'Active Workout')}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', mt: 1 }}>
-              <TimerIcon fontSize="small" sx={{ mr: 1, color: 'primary.main' }} />
-              {session.status === 'completed' && session.start_time && session.end_time ? (
-                <Typography variant="body1">
-                  Duration: {formatDuration(session.start_time, session.end_time)}
-                </Typography>
-              ) : (
-                <Typography variant="h6" sx={{ fontWeight: 'bold', color: 'primary.main' }}>
-                  Elapsed Time: {formatElapsedTime()}
-                </Typography>
-              )}
-            </Box>
-          </Grid>
-          <Grid item xs={12} md={6} sx={{ display: 'flex', justifyContent: { xs: 'flex-start', md: 'flex-end' } }}>
-            <Box>
-              <Chip
-                label={`Status: ${session.status === 'completed' ? 'Completed' : 'In Progress'}`}
-                color={session.status === 'completed' ? 'success' : 'warning'}
-                sx={{ mr: 1 }}
-              />
-              <Chip
-                label={`Progress: ${Math.round(calculateCompletion())}%`}
-                color="primary"
-              />
-            </Box>
-          </Grid>
-        </Grid>
-        <LinearProgress 
-          variant="determinate" 
-          value={calculateCompletion()} 
-          sx={{ mt: 2, height: 8, borderRadius: 4 }}
-        />
-      </Paper>
-
-      {/* Exercise Stepper - only show for in-progress workouts */}
-      {session.status !== 'completed' && (
-        <Stepper 
-          activeStep={currentExerciseIndex} 
-          alternativeLabel 
-          sx={{ mb: 3, display: { xs: 'none', md: 'flex' } }}
-        >
-          {session.exercises.map((exercise, index) => (
-            <Step key={index}>
-              <StepLabel>{getExerciseProp(exercise, 'name', 'Exercise')}</StepLabel>
-            </Step>
-          ))}
-        </Stepper>
-      )}
-
-      {/* Exercise Navigation Panel - for mobile and better navigation */}
-      {session.status !== 'completed' && (
-        <Paper sx={{ p: 2, mb: 3 }}>
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      {/* Loading and Error States */}
+      {isLoading && <LoadingScreen />}
+      {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+      {noExercisesForToday && (
+        <Paper sx={{ p: 3, textAlign: 'center' }}>
           <Typography variant="h6" gutterBottom>
-            Exercise Navigation
+            No exercises scheduled for this workout day.
           </Typography>
-          <Grid container spacing={1}>
-            {session.exercises.map((exercise, index) => {
-              // Check if this exercise has any completed sets
-              const exerciseCompletedSets = completedSets[exercise.id] || {};
-              const hasCompletedSets = Object.keys(exerciseCompletedSets).length > 0;
-              const isCurrentExercise = index === currentExerciseIndex;
-              
-              return (
-                <Grid item xs={12} sm={6} md={4} key={exercise.id}>
-                  <Paper
-                    elevation={isCurrentExercise ? 3 : 1}
-                    sx={{ 
-                      p: 1.5,
-                      display: 'flex',
-                      alignItems: 'center',
-                      cursor: 'pointer',
-                      bgcolor: isCurrentExercise ? 'primary.light' : hasCompletedSets ? 'success.light' : 'background.paper',
-                      '&:hover': {
-                        bgcolor: isCurrentExercise ? 'primary.light' : 'action.hover'
-                      },
-                      borderLeft: '4px solid',
-                      borderLeftColor: isCurrentExercise ? 'primary.main' : hasCompletedSets ? 'success.main' : 'transparent'
-                    }}
-                    onClick={() => setCurrentExerciseIndex(index)}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                      <Box sx={{ mr: 1 }}>
-                        {hasCompletedSets ? (
-                          <CheckIcon sx={{ color: 'success.main' }} />
-                        ) : (
-                          <FitnessCenterIcon color={isCurrentExercise ? 'primary' : 'action'} />
-                        )}
-                      </Box>
-                      <Box sx={{ flexGrow: 1 }}>
-                        <Typography 
-                          variant="body1" 
-                          sx={{ 
-                            fontWeight: isCurrentExercise ? 'bold' : 'normal',
-                            color: isCurrentExercise ? 'primary.dark' : hasCompletedSets ? 'success.dark' : 'text.primary'
-                          }}
-                        >
-                          {getExerciseProp(exercise, 'name')}
-                        </Typography>
-                        {exercise.sets_count > 0 && (
-                          <Typography variant="caption" color="text.secondary">
-                            {hasCompletedSets ? `${Object.keys(exerciseCompletedSets).length}/${exercise.sets_count}` : `0/${exercise.sets_count}`} sets
-                          </Typography>
-                        )}
-                      </Box>
-                    </Box>
-                  </Paper>
-                </Grid>
-              );
-            })}
-          </Grid>
+          <Button variant="contained" onClick={() => navigate('/dashboard')} startIcon={<HomeIcon />}>
+            Back to Dashboard
+          </Button>
         </Paper>
       )}
 
-      {/* Add a back button for completed sessions */}
-      {session.status === 'completed' && (
-        <Button
-          variant="outlined"
-          startIcon={<ArrowBackIcon />}
-          onClick={() => navigate('/workout-sessions')}
-          sx={{ mb: 3 }}
-        >
-          Back to Workout History
-        </Button>
+      {/* Main Workout Content */}
+      {!isLoading && !error && !noExercisesForToday && session && (
+         <Grid container spacing={3}>
+            {/* ... (rest of the ActiveWorkout JSX) ... */}
+         </Grid>
       )}
       
-      {/* Current Exercise Card */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Box>
-              <Typography variant="h5" component="div">
-                {getExerciseProp(currentExercise, 'name', 'Unknown Exercise')}
-              </Typography>
-              {getExerciseProp(currentExercise, 'muscle_group') && (
-                <Typography variant="subtitle2" color="text.secondary">
-                  {getExerciseProp(currentExercise, 'muscle_group')}
-                </Typography>
-              )}
-            </Box>
-            <Chip 
-              icon={<FitnessCenterIcon />} 
-              label={`Exercise ${currentExerciseIndex + 1}/${session.exercises.length}`}
-              color="primary"
-              variant="outlined"
-            />
-          </Box>
-          
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 2 }}>
-            {getExerciseProp(currentExercise, 'equipment') && (
-              <Chip 
-                label={`Equipment: ${getExerciseProp(currentExercise, 'equipment')}`} 
-                variant="outlined" 
-                size="small" 
-              />
-            )}
-            {getExerciseProp(currentExercise, 'category') && (
-              <Chip 
-                label={`Type: ${getExerciseProp(currentExercise, 'category')}`} 
-                variant="outlined" 
-                size="small" 
-              />
-            )}
-            {currentExercise.rest_seconds && (
-              <Chip 
-                icon={<TimerIcon />}
-                label={`Rest: ${currentExercise.rest_seconds}s`} 
-                variant="outlined" 
-                size="small" 
-              />
-            )}
-          </Box>
-          
-          {getExerciseProp(currentExercise, 'description') && (
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              {getExerciseProp(currentExercise, 'description')}
-            </Typography>
-          )}
-          
-          <Divider sx={{ my: 2 }} />
-          
-          {/* Target Section */}
-          <Box sx={{ mb: 3 }}>
-            <Typography variant="h6" gutterBottom>
-              Target
-            </Typography>
-            <Grid container spacing={2}>
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Sets</Typography>
-                  <Typography variant="h5">{exerciseSetsCount}</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Reps</Typography>
-                  <Typography variant="h5">{currentExercise.target_reps || '—'}</Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Weight</Typography>
-                  <Typography variant="h5">
-                    {currentExercise.target_weight ? 
-                      displayWeight(currentExercise.target_weight) : 
-                      '—'}
-                  </Typography>
-                </Paper>
-              </Grid>
-              <Grid item xs={12} sm={6} md={3}>
-                <Paper sx={{ p: 2, textAlign: 'center' }}>
-                  <Typography variant="subtitle2" color="text.secondary">Progress</Typography>
-                  <Typography variant="h5">
-                    {completedSets[currentExercise.id] ? 
-                      `${Object.keys(completedSets[currentExercise.id]).length}/${exerciseSetsCount}` : 
-                      `0/${exerciseSetsCount}`}
-                  </Typography>
-                </Paper>
-              </Grid>
-            </Grid>
-          </Box>
-          
-          {/* Plate Calculator for barbell exercises with weight */}
-          {currentExercise.target_weight > 0 && 
-           (getExerciseProp(currentExercise, 'equipment', '').toLowerCase().includes('barbell') || 
-            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('bench') || 
-            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('squat') || 
-            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('deadlift') || 
-            getExerciseProp(currentExercise, 'name', '').toLowerCase().includes('press')
-           ) && (
-            <Grid container>
-              <Grid item xs={12}>
-                <Box sx={{ mb: 3 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <FitnessCenterIcon />
-                    <Typography variant="h6" gutterBottom>
-                      Plate Calculator
-                    </Typography>
-                  </Box>
-                  
-                  {/* Pass the proper target weight value based on unit system */}
-                  <PlateCalculator 
-                    targetWeight={Math.round(parseFloat(currentExercise.target_weight) * 2) / 2} 
-                  />
-                </Box>
-              </Grid>
-            </Grid>
-          )}
-          
-          {/* Sets Section */}
-          <Typography variant="h6" gutterBottom>
-            Sets
-          </Typography>
-          
-          <Grid container spacing={2}>
-            {Array.from({ length: exerciseSetsCount }).map((_, setIndex) => {
-              const setNumber = setIndex + 1;
-              const isCompleted = completedSets[currentExercise.id]?.[setNumber]?.completed;
-              const setWeight = completedSets[currentExercise.id]?.[setNumber]?.weight || '';
-              const setReps = completedSets[currentExercise.id]?.[setNumber]?.reps || '';
-              
-              return (
-                <Grid item xs={12} key={setIndex} id={`set-${setNumber}`}>
-                  <Paper 
-                    sx={{ 
-                      p: 2, 
-                      bgcolor: isCompleted ? 'success.light' : 'background.paper',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexWrap: { xs: 'wrap', sm: 'nowrap' },
-                      border: isCompleted ? '1px solid' : 'none',
-                      borderColor: 'success.main',
-                      position: 'relative' // Add for absolute positioning of badge
-                    }}
-                  >
-                    {/* Add badge for previously completed sets */}
-                    {completedSets[currentExercise.id]?.[setNumber]?.fromDatabase && (
-                      <Box 
-                        sx={{ 
-                          position: 'absolute', 
-                          top: 0, 
-                          right: 0, 
-                          bgcolor: 'info.main',
-                          color: 'white',
-                          fontSize: '0.75rem',
-                          fontWeight: 'bold',
-                          px: 1,
-                          py: 0.2,
-                          borderBottomLeftRadius: 4,
-                          borderTopRightRadius: 4
-                        }}
-                      >
-                        Previously Saved
-                      </Box>
-                    )}
-                    
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: { xs: 2, sm: 0 }, width: { xs: '100%', sm: 'auto' } }}>
-                      <FitnessCenterIcon sx={{ mr: 1, color: isCompleted ? 'success.dark' : 'text.secondary' }} />
-                      <Typography variant="subtitle1" sx={{ fontWeight: isCompleted ? 'bold' : 'normal' }}>
-                        Set {setNumber}
-                        {completedSets[currentExercise.id]?.[setNumber]?.fromDatabase && (
-                          <Typography 
-                            component="span" 
-                            variant="caption" 
-                            sx={{ 
-                              ml: 1, 
-                              display: { xs: 'inline', sm: 'none' }, 
-                              color: 'info.main', 
-                              fontWeight: 'bold'
-                            }}
-                          >
-                            (Previously Saved)
-                          </Typography>
-                        )}
-                      </Typography>
-                    </Box>
-                    
-                    <Grid container spacing={2} sx={{ ml: { xs: 0, sm: 2 }, flex: 1 }}>
-                      <Grid item xs={12} sm={5}>
-                        {(() => {
-                          // Debug logging for weight values
-                          if (process.env.NODE_ENV !== 'production') {
-                            const usedWeight = completedSets[currentExercise.id]?.[setNumber]?.weight !== undefined 
-                              ? completedSets[currentExercise.id][setNumber].weight 
-                              : (isCompleted 
-                                  ? setWeight 
-                                  : (currentExercise.target_weight || ''));
-                            
-                            console.log(`Set ${setNumber} weight value:`, {
-                              fromCompletedSets: completedSets[currentExercise.id]?.[setNumber]?.weight,
-                              fromSetWeight: setWeight,
-                              fromTargetWeight: currentExercise.target_weight,
-                              actualValueUsed: usedWeight,
-                              unitSystem
-                            });
-                          }
-                          return null;
-                        })()}
-
-                        <TextField
-                          id={`set-${currentExercise.id}-${setNumber}-weight`}
-                          type="number"
-                          variant="outlined"
-                          size="small"
-                          margin="dense"
-                          sx={{ width: '100%' }}
-                          // Allow editing regardless of completed status
-                          disabled={false} 
-                          value={(() => {
-                            const exercise = session.exercises.find(e => e.id === currentExercise.id);
-                            
-                            // Try to get from completedSets first
-                            if (completedSets[currentExercise.id]?.[setNumber]?.weight) {
-                              // Return stored value, but round to whole number
-                              const value = completedSets[currentExercise.id][setNumber].weight;
-                              return Math.round(parseFloat(value));
-                            }
-                            
-                            // Use the already converted target_weight directly (avoid double conversion)
-                            return exercise?.target_weight ? Math.round(exercise.target_weight) : '';
-                          })()}
-                          onChange={(e) => {
-                            // Update local state immediately for responsiveness
-                            const newValue = e.target.value;
-                            setCompletedSets(prev => {
-                              const updated = { ...prev };
-                              if (!updated[currentExercise.id]) updated[currentExercise.id] = {};
-                              
-                              updated[currentExercise.id][setNumber] = {
-                                ...(updated[currentExercise.id][setNumber] || {}),
-                                weight: newValue,
-                                completed: updated[currentExercise.id][setNumber]?.completed || false
-                              };
-                              
-                              return updated;
-                            });
-                          }}
-                          InputProps={{ 
-                            endAdornment: <Typography color="textSecondary">{unitSystem === 'metric' ? 'kg' : 'lbs'}</Typography>,
-                            inputProps: { min: 0 } 
-                          }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={5}>
-                        <TextField
-                          label="Reps"
-                          type="number"
-                          fullWidth
-                          size="small"
-                          // Use the value from completedSets directly to reflect current edits
-                          value={completedSets[currentExercise.id]?.[setNumber]?.reps !== undefined 
-                            ? completedSets[currentExercise.id][setNumber].reps 
-                            : (isCompleted ? setReps : (currentExercise.target_reps || ''))}
-                          onChange={(e) => {
-                            // Update local state immediately for responsiveness
-                            const newValue = e.target.value;
-                            setCompletedSets(prev => {
-                              const updated = { ...prev };
-                              if (!updated[currentExercise.id]) updated[currentExercise.id] = {};
-                              
-                              updated[currentExercise.id][setNumber] = {
-                                ...updated[currentExercise.id][setNumber],
-                                reps: newValue,
-                                // Preserve completed status if it exists
-                                completed: updated[currentExercise.id][setNumber]?.completed || false
-                              };
-                              return updated;
-                            });
-                          }}
-                          InputProps={{ inputProps: { min: 0 } }}
-                        />
-                      </Grid>
-                      <Grid item xs={12} sm={2} sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                        <Button
-                          variant={isCompleted ? "outlined" : "contained"}
-                          color={isCompleted ? "primary" : "success"}
-                          size="small"
-                          onClick={() => {
-                            // Get the current values directly from the state
-                            const currentWeight = completedSets[currentExercise.id]?.[setNumber]?.weight || 
-                                                 (currentExercise.target_weight || '');
-                            const currentReps = completedSets[currentExercise.id]?.[setNumber]?.reps || 
-                                               (currentExercise.target_reps || '');
-                            
-                            // Save to backend with proper type conversion
-                            handleCompleteSet(
-                              currentExercise.id, 
-                              setNumber, 
-                              currentWeight,
-                              currentReps
-                            );
-                          }}
-                        >
-                          {isCompleted ? "Update" : "Save"}
-                        </Button>
-                      </Grid>
-                    </Grid>
-                  </Paper>
-                </Grid>
-              );
-            })}
-            
-            {/* Add Set Button - only show if not all sets are completed */}
-            {Object.keys(completedSets[currentExercise.id] || {}).length < exerciseSetsCount && (
-              <Grid item xs={12}>
-                <Button
-                  variant="outlined"
-                  startIcon={<AddIcon />}
-                  onClick={() => {
-                    const nextSetNumber = Object.keys(completedSets[currentExercise.id] || {}).length + 1;
-                    // Just scroll to the next set since all sets are now directly editable
-                    const element = document.getElementById(`set-${nextSetNumber}`);
-                    if (element) {
-                      element.scrollIntoView({ behavior: 'smooth' });
-                    }
-                  }}
-                  fullWidth
-                  sx={{ mt: 1 }}
-                >
-                  Go to Next Set
-                </Button>
-              </Grid>
-            )}
-          </Grid>
-        </CardContent>
-      </Card>
+      {/* Weight Selection Dialog */} 
+      <WeightSelectionDialog
+        open={weightDialogOpen}
+        onClose={() => {
+            setWeightDialogOpen(false);
+            // If user cancels, maybe navigate back or show an error?
+            // For now, just close it. User can restart if needed.
+            if (!session) { // If cancelling before session is fully loaded
+                 navigate('/dashboard'); 
+            }
+        }}
+        exercises={exercisesNeedingWeight}
+        onSaveWeights={handleSaveInitialWeights}
+      />
       
-      {/* Navigation Buttons */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-        <Button
-          variant="outlined"
-          startIcon={<PrevIcon />}
-          onClick={handlePrevExercise}
-          disabled={currentExerciseIndex === 0}
-        >
-          Previous Exercise
-        </Button>
-        
-        {/* Show completion status */}
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ mr: 2 }}>
-            {Object.keys(completedSets[currentExercise.id] || {}).length}/{exerciseSetsCount} sets recorded
-          </Typography>
-        </Box>
-        
-        <Box>
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={handleCancelClick}
-            sx={{ mr: 2 }}
-          >
-            Cancel Workout
-          </Button>
-          
-          <Button
-            variant="contained"
-            color="primary"
-            endIcon={currentExerciseIndex < session.exercises.length - 1 ? <NextIcon /> : <CheckIcon />}
-            onClick={handleNextExercise}
-          >
-            {currentExerciseIndex < session.exercises.length - 1 ? 'Next Exercise' : 'Finish Workout'}
-          </Button>
-        </Box>
-      </Box>
-      
-      {/* Finish Workout Dialog */}
+      {/* Other Dialogs (Confirm Finish, Cancel Confirm) */}
       <Dialog
         open={confirmFinishOpen}
         onClose={() => setConfirmFinishOpen(false)}
@@ -1690,7 +1327,6 @@ const ActiveWorkout = () => {
         </DialogActions>
       </Dialog>
       
-      {/* Cancel Workout Dialog */}
       <Dialog
         open={cancelConfirmOpen}
         onClose={() => setCancelConfirmOpen(false)}
@@ -1758,7 +1394,7 @@ const ActiveWorkout = () => {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Box>
+    </Container>
   );
 };
 

@@ -71,21 +71,11 @@ const OnboardingGuide = ({ user, open, onClose }) => {
       console.log('Onboarding: Marking complete on backend.');
       const updatedUser = await userApi.markOnboardingComplete();
 
-      // 3. Update local AuthContext state immediately if not updated by preference change
-      if (updatedUser.data && !preferencesUpdated) {
-         console.log('Onboarding: Updating local user state.');
-         // Update local state with potentially updated user data (including the completed flag)
-         updateCurrentUserLocally(updatedUser.data); 
-      } else if (updatedUser.data && preferencesUpdated) {
-          // If preferences were updated, AuthContext should have been updated already by setUnitPreference
-          // But we still need to ensure the onboarding flag is set locally if it wasn't part of the updateProfile response
-          // Let's ensure the update includes the flag regardless
-          updateCurrentUserLocally({ ...updatedUser.data, has_completed_onboarding: true });
+      // 3. Update local AuthContext state immediately
+      if (updatedUser.data) {
+         console.log('Onboarding: Updating local user state directly after API call.');
+         updateCurrentUserLocally({ ...updatedUser.data, has_completed_onboarding: true });
       }
-
-      // 4. Close the dialog
-      console.log('OnboardingGuide: Calling onClose()...');
-      onClose();
     } catch (error) {
       console.error('Error finishing onboarding:', error);
       // Handle error display if needed (e.g., snackbar)

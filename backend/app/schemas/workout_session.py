@@ -49,8 +49,11 @@ class SessionExerciseResponse(SessionExerciseBase):
     
     exercise: Optional[ExerciseResponse] = None
     
-    target_weight: Optional[float] = None
-    target_reps: Optional[int] = None
+    # Add fields for user-specific progress (populated from UserProgramProgress)
+    current_weight: Optional[float] = None
+    current_reps: Optional[int] = None
+    # target_weight: Optional[float] = None # Removed
+    # target_reps: Optional[int] = None # Removed
     rest_seconds: Optional[int] = None
     sets_count: Optional[int] = None
     

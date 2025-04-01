@@ -242,10 +242,10 @@ const CreateWorkoutPlan = () => {
       [field]: value
     }));
 
-    // Debug logging to trace weight values
-    if (field === 'target_weight') {
-      console.log(`DEBUG - Exercise weight set to ${value} ${unitSystem === 'metric' ? 'kg' : 'lbs'} (stored in component state in user's preferred unit)`);
-    }
+    // Debug logging to trace weight values (REMOVED for target_weight)
+    // if (field === 'target_weight') {
+    //   console.log(`DEBUG - Exercise weight set to ${value} ${unitSystem === 'metric' ? 'kg' : 'lbs'} (stored in component state in user's preferred unit)`);
+    // }
   };
   
   // Remove an exercise from the plan
@@ -402,14 +402,13 @@ const CreateWorkoutPlan = () => {
         // Log the exercise being processed
         console.log(`Processing exercise for API: ${exercise.name}`);
         console.log(`- Current unit system: ${unitSystem}`);
-        console.log(`- Raw weight from component state: ${exercise.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`);
+        // console.log(`- Raw weight from component state: ${exercise.target_weight} ${unitSystem === 'metric' ? 'kg' : 'lbs'}`); // Removed target_weight logging
         
         return {
           exercise_id: exercise.id,
           sets: exercise.sets,
           reps: exercise.reps,
           rest_seconds: exercise.rest_seconds,
-          target_weight: parseFloat(exercise.target_weight || 0) || 0,
           order: exercise.order || index + 1, // Use existing order if available
           day_of_week: exercise.day_of_week || null,
           progression_type: exercise.progression_type || 'weight',
@@ -425,24 +424,26 @@ const CreateWorkoutPlan = () => {
         // Convert weights to kg for storage using parseWeightInput
         // IMPORTANT: This is where the conversion from lbs → kg happens
         exercisesWithConvertedWeights = exercisesWithConvertedWeights.map(exercise => {
-          const weightInLbs = exercise.target_weight;
-          const weightInKg = parseWeightInput(weightInLbs, unitSystem);
-          
-          console.log(`Converting weight for '${exercise.exercise_id}': ${weightInLbs} lbs → ${weightInKg} kg`);
-          
+          // const weightInLbs = exercise.target_weight; // Removed target_weight conversion
+          // const weightInKg = parseWeightInput(weightInLbs, unitSystem); // Removed target_weight conversion
+          // console.log(`Converting weight for '${exercise.exercise_id}': ${weightInLbs} lbs → ${weightInKg} kg`); // Removed target_weight logging
+
+          // Keep progression value conversion if type is weight
+          const convertedProgressionValue = exercise.progression_type === 'weight'
+              ? parseWeightInput(exercise.progression_value, unitSystem) // Convert progression value if needed
+              : exercise.progression_value;
+
           return {
             ...exercise,
-            target_weight: weightInKg,
+            // target_weight: weightInKg, // Removed target_weight
             // Also convert progression value if the progression is weight-based
-            progression_value: exercise.progression_type === 'weight' 
-              ? parseWeightInput(exercise.progression_value, unitSystem)
-              : exercise.progression_value
+            progression_value: convertedProgressionValue
           };
         });
-        
-        console.log('DEBUG - Weights converted to kg for storage:', exercisesWithConvertedWeights);
+
+        console.log('DEBUG - Progression values converted to kg (if applicable) for storage:', exercisesWithConvertedWeights);
       } else {
-        console.log('DEBUG - No weight conversion needed, unit system is already metric');
+        console.log('DEBUG - No weight conversion needed for progression values, unit system is already metric');
       }
       
       const planData = {
@@ -536,26 +537,12 @@ const CreateWorkoutPlan = () => {
               
               <Grid item xs={12} sm={6} md={4}>
                 <TextField
-                  label="Rest Between Sets (seconds)"
+                  label="Rest (seconds)"
                   type="number"
                   fullWidth
-                  value={currentExercise.rest_seconds}
+                  value={currentExercise.rest_seconds || ''}
                   onChange={(e) => handleExerciseConfigChange('rest_seconds', Math.max(0, parseInt(e.target.value) || 0))}
                   InputProps={{ inputProps: { min: 0 } }}
-                />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
-                <TextField
-                  label={`Target Weight (${unitSystem === 'metric' ? 'kg' : 'lbs'})`}
-                  type="number"
-                  fullWidth
-                  value={currentExercise.target_weight || 0}
-                  onChange={(e) => handleExerciseConfigChange('target_weight', Math.max(0, parseFloat(e.target.value) || 0))}
-                  InputProps={{ 
-                    inputProps: { min: 0, step: 2.5 },
-                    endAdornment: <InputAdornment position="end">{weightUnit}</InputAdornment>
-                  }}
                 />
               </Grid>
               
@@ -933,7 +920,6 @@ const CreateWorkoutPlan = () => {
                                           {exercise.muscle_group}
                                           <Typography component="span" variant="body2" sx={{ display: 'block' }}>
                                             {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                            {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
                                           </Typography>
                                         </>
                                       }
@@ -1045,7 +1031,6 @@ const CreateWorkoutPlan = () => {
                                           {exercise.muscle_group}
                                           <Typography component="span" variant="body2" sx={{ display: 'block' }}>
                                             {exercise.sets} sets × {exercise.reps} reps • {exercise.rest_seconds}s rest
-                                            {exercise.target_weight > 0 && ` • ${displayWeight(exercise.target_weight, unitSystem)}`}
                                           </Typography>
                                         </>
                                       }

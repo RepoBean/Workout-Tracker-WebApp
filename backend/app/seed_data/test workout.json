@@ -1,13 +1,13 @@
 {
-    "name": "Google Sheets converted workout",
-    "description": "Program generated from CSV log",
+    "name": "Full Body Strength 3-Day",
+    "description": "A balanced 3-day full body strength training program.",
     "days_per_week": 3,
     "duration_weeks": 8,
     "is_public": true,
     "exercises": [
         {
             "exercise_id": 35,
-            "exercise_name": "Leg Curls",
+            "exercise_name": "Seated Leg Curl Machine",
             "sets": 3,
             "reps": 12,
             "rest_seconds": 60,
@@ -20,7 +20,7 @@
         },
         {
             "exercise_id": 11,
-            "exercise_name": "Squat",
+            "exercise_name": "Barbell Squat (Back Squat)",
             "sets": 3,
             "reps": 10,
             "rest_seconds": 60,
@@ -33,7 +33,7 @@
         },
         {
             "exercise_id": 4,
-            "exercise_name": "Incline Bench Press",
+            "exercise_name": "Incline Barbell Bench Press",
             "sets": 3,
             "reps": 6,
             "rest_seconds": 60,
@@ -46,7 +46,7 @@
         },
         {
             "exercise_id": 9,
-            "exercise_name": "Lat Pulldown",
+            "exercise_name": "Lat Pulldown (Wide Grip)",
             "sets": 3,
             "reps": 12,
             "rest_seconds": 60,
@@ -59,7 +59,7 @@
         },
         {
             "exercise_id": 16,
-            "exercise_name": "Overhead Press",
+            "exercise_name": "Overhead Press (Barbell)",
             "sets": 3,
             "reps": 6,
             "rest_seconds": 60,
@@ -72,7 +72,7 @@
         },
         {
             "exercise_id": 8,
-            "exercise_name": "Deadlift",
+            "exercise_name": "Deadlift (Conventional)",
             "sets": 3,
             "reps": 8,
             "rest_seconds": 60,
@@ -85,7 +85,7 @@
         },
         {
             "exercise_id": 36,
-            "exercise_name": "Leg Extensions",
+            "exercise_name": "Leg Extension Machine",
             "sets": 3,
             "reps": 15,
             "rest_seconds": 60,
@@ -111,7 +111,7 @@
         },
         {
             "exercise_id": 36,
-            "exercise_name": "Cable Rows",
+            "exercise_name": "Seated Cable Row",
             "sets": 3,
             "reps": 12,
             "rest_seconds": 60,
@@ -124,7 +124,7 @@
         },
         {
             "exercise_id": 34,
-            "exercise_name": "Hanging Leg Raises",
+            "exercise_name": "Hanging Knee Raise",
             "sets": 3,
             "reps": 8,
             "rest_seconds": 60,
@@ -137,7 +137,7 @@
         },
         {
             "exercise_id": 13,
-            "exercise_name": "Leg Press",
+            "exercise_name": "Leg Press Machine",
             "sets": 3,
             "reps": 10,
             "rest_seconds": 60,
@@ -150,7 +150,7 @@
         },
         {
             "exercise_id": 15,
-            "exercise_name": "Calf Raise",
+            "exercise_name": "Calf Raise (Machine - Standing)",
             "sets": 3,
             "reps": 8,
             "rest_seconds": 60,
@@ -176,7 +176,7 @@
         },
         {
             "exercise_id": 35,
-            "exercise_name": "Lateral Raises",
+            "exercise_name": "Dumbbell Lateral Raise",
             "sets": 3,
             "reps": 10,
             "rest_seconds": 60,
@@ -189,7 +189,7 @@
         },
         {
             "exercise_id": 36,
-            "exercise_name": "Cable Rows",
+            "exercise_name": "Seated Cable Row",
             "sets": 3,
             "reps": 10,
             "rest_seconds": 60,
